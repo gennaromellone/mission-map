@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mission Planner</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+    <div id="title">Mission Planner</div>
+    <div id="mission-name">Mission: None</div>
+
+    <div id="mission-controls" style="display: none;">
+        <button class="button" id="add-line">Add Line</button>
+        <button class="button" id="remove-line">Remove Line</button>
+        <button class="button" id="clear-line">Clear</button>
+    </div>
+
+    <!-- Popup per il salvataggio -->
+    <div id="save-popup" class="popup" style="display: none;">
+        <h3>Save Mission</h3>
+        <label for="mission-name">Mission Name:</label>
+        <input type="text" id="mission-name-input">
+        
+        <label for="mission-user">Select User:</label>
+        <select id="mission-user"></select>
+        
+        <label for="mission-boat">Select Boat:</label>
+        <select id="mission-boat"></select>
+
+        <button id="confirm-save">Save</button>
+        <button id="cancel-save">Cancel</button>
+    </div>
+
+    <!-- Popup per il caricamento delle missioni -->
+    <div id="load-popup" class="popup" style="display: none;">
+        <h3>Load Mission</h3>
+        <label for="mission-select">Select a Mission:</label>
+        <select id="mission-select"></select>
+
+        <button id="confirm-load">Load</button>
+        <button id="cancel-load">Cancel</button>
+    </div>
+
+    <div id="buttons">
+        <button class="button" id="plan-mission">Plan Mission</button>
+        <button class="button" id="create-mission">Create Mission</button>
+        <button class="button" id="deleteMissionBtn">Delete Mission</button>
+        <button class="button" id="start-mission">Start Mission</button>
+        <button class="button" id="stop-mission">Stop Mission</button>
+        <button class="button" id="save-mission">Save</button>
+        <button class="button" id="load-mission">Load</button>
+        <button class="button" id="export-mission">Export</button>
+    </div>
+
+    <div id="map">
+        <div id="coordinates">
+            Lat: <span id="current-lat">--</span>, Lon: <span id="current-lon">--</span>, Depth: <span id="current-depth">--</span> m
+        </div>
+    </div>
+
+
+    <script src="/static/leaflet/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="/static/leaflet/leaflet.rotatedMarker.js"></script>
+    <script src="/static/js/scripts.js"></script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #023047; /* Colore di sfondo: azzurro chiaro */
+    color: #fff; /* Colore del testo: grigio scuro */
+}
+#map {
+    height: 80vh;
+    width: 100%;
+}
+#title {
+    text-align: center;
+    font-size: 2em;
+    margin: 1em 0;
+}
+#buttons {
+    text-align: center;
+    margin-bottom: 10px;
+}
+.button {
+    padding: 10px 20px;
+    margin: 0 5px;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    background-color: #219ebc;
+    color: white;
+    border-radius: 5px;
+}
+.button:hover {
+    background-color: #8ecae6;
+}
+
+#coordinates {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background-color: rgba(0, 0, 0, 0.4); /* Sfondo semitrasparente */
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 25px;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 1000; /* Assicurati che sia sopra la mappa */
+}
