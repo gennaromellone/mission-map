@@ -52,6 +52,7 @@ document.getElementById('start-mission').addEventListener('click', async () => {
         if (trackingInterval) clearInterval(trackingInterval); 
 
         trackingInterval = setInterval(async () => {
+            //const response = await fetch('/api/simulate_position');
             const response = await fetch('/api/position');
             const data = await response.json();
 

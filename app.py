@@ -6,13 +6,21 @@ import random
 import csv
 import re
 
+from broadcaster import MsgReceiver
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///argo_mission.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-
+broadcast = MsgReceiver()
 saved_lines = []
+
+last_position = {
+    'lat': 40.855640711460936,
+    'lon':  14.284214343900299,
+    'depth': 0.0
+    }
 
 # Database models
 class User(db.Model):
@@ -54,8 +62,8 @@ def update_position():
     db.session.commit()
     return jsonify({'status': 'success'})
 
-@app.route('/api/position', methods=['GET'])
-def get_position():
+@app.route('/api/simulate_position', methods=['GET'])
+def get_simulated_position():
     lat_min, lat_max = 40.6, 40.9  # Limiti di latitudine
     lon_min, lon_max = 13.9, 14.5  # Limiti di longitudine
     depth_min, depth_max = 10, 200  # Profondità tra 10m e 200m
@@ -68,23 +76,27 @@ def get_position():
 
     return jsonify({"path": [random_position]})
 
-@app.route('/api/save_plan', methods=['POST'])
-def save_plan():
-    data = request.get_json()
-    user_id = data['user_id']
-    name = data['name']
-    path = data['path']
-    plan = MissionPlan(name=name, path=path, user_id=user_id)
-    db.session.add(plan)
-    db.session.commit()
-    return jsonify({'status': 'success'})
+@app.route('/api/position', methods=['GET'])
+def get_position():
+    # Get depth
+    try:
+        depth = broadcast.getDepth()
+        last_position['depth'] = depth
+    except:
+        print("ERROR: No depth!")
 
-@app.route('/api/load_plans/<int:user_id>', methods=['GET'])
-def load_plans(user_id):
-    plans = MissionPlan.query.filter_by(user_id=user_id).all()
-    return jsonify({
-        'plans': [{'id': p.id, 'name': p.name, 'path': p.path} for p in plans]
-    })
+    # Get GPS
+    try:
+        #gps = broadcast.getGPS()
+        msg = broadcast.getMessage(simulate=True)
+        last_position['lat'] = msg['mLatGPS']
+        last_position['lon'] = msg['mLonGPS']
+    except:
+        #msg = "Waiting IMU"
+        print("ERROR: No GPS!")
+
+
+    return jsonify({"path": [last_position]})
 
 @app.route('/api/save-mission', methods=['POST'])
 def save_mission():
@@ -158,10 +170,10 @@ def export_mission(mission_id):
     if not mission:
         return jsonify({"error": "Missione non trovata"}), 404
     
-    mission_name = re.sub(r'\W+', '_', mission.name)  # Sostituisce caratteri speciali con "_"
+    mission_name = re.sub(r'\W+', '_', mission.name)
 
     def generate():
-        yield "timestamp,latitude,longitude,depth\n"  # Intestazione CSV
+        yield "timestamp,latitude,longitude,depth\n"
         for data in mission_data:
             yield f"{data.timestamp},{data.latitude},{data.longitude},{data.depth}\n"
 
