@@ -8,13 +8,33 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body>
-    <div id="title">Mission Planner</div>
     <div id="mission-name">Mission: None</div>
 
-    <div id="mission-controls" style="display: none;">
-        <button class="button" id="add-line">Add Line</button>
-        <button class="button" id="edit-lines">Edit Lines</button>
-        <button class="button" id="clear-line">Clear</button>
+    <div id="menu-toggle">☰</div>
+
+    <!-- Menu laterale -->
+    <div id="sidebar">
+        <div>Mission-Planner App</div>
+        <button class="button" id="plan-mission">Plan Mission</button>
+        <div id="mission-controls" style="display: none;">
+            <button class="button" id="add-line">Add Line</button>
+            <button class="button" id="edit-lines">Edit Lines</button>
+            <button class="button" id="clear-line">Clear</button>
+        </div>
+        <button class="button" id="create-mission">Create Mission</button>
+        <button class="button" id="deleteMissionBtn">Delete Mission</button>
+
+        <button class="button" style="margin-top: 25px;" id="start-mission">Start Mission</button>
+
+        <button class="button" style="margin-top: 25px;" id="save-mission">Save</button>
+        <button class="button" id="load-mission">Load</button>
+        <button class="button" id="export-mission">Export</button>
+    </div>
+
+    <div id="map">
+        <div id="coordinates">
+            Lat: <span id="current-lat">--</span>, Lon: <span id="current-lon">--</span>, Depth: <span id="current-depth">--</span> m
+        </div>
     </div>
 
     <!-- Popup per il salvataggio -->
@@ -41,23 +61,6 @@
 
         <button id="confirm-load">Load</button>
         <button id="cancel-load">Cancel</button>
-    </div>
-
-    <div id="buttons">
-        <button class="button" id="plan-mission">Plan Mission</button>
-        <button class="button" id="create-mission">Create Mission</button>
-        <button class="button" id="deleteMissionBtn">Delete Mission</button>
-        <button class="button" id="start-mission">Start Mission</button>
-        <button class="button" id="stop-mission">Stop Mission</button>
-        <button class="button" id="save-mission">Save</button>
-        <button class="button" id="load-mission">Load</button>
-        <button class="button" id="export-mission">Export</button>
-    </div>
-
-    <div id="map">
-        <div id="coordinates">
-            Lat: <span id="current-lat">--</span>, Lon: <span id="current-lon">--</span>, Depth: <span id="current-depth">--</span> m
-        </div>
     </div>
 
 

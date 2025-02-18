@@ -19,6 +19,7 @@ let boatMarker = L.marker(startPos,
     rotationAngle: 0, 
     rotationOrigin: 'center'
 }).addTo(map);
+map.zoomControl.setPosition('topright');
 
 let selectedMissionId = null;
 let trackingInterval = null;
@@ -32,15 +33,17 @@ let removingMode = false; // Modalità di rimozione
 let pointsCount = 0; // Contatore per i punti della linea
 let previousPoint = null;
 
+let missionRunning = false;
 
 document.getElementById('start-mission').addEventListener('click', async () => {
+    const button = document.getElementById('start-mission');
 
-    if (!selectedMissionId) {
-        alert("⚠️ Nessuna missione selezionata! Crea o carica una missione prima di iniziare.");
-        return;
-    }
-    else{
-        // Recupera il percorso storico della missione selezionata
+    if (!missionRunning) {
+        if (!selectedMissionId) {
+            alert("⚠️ Nessuna missione selezionata! Crea o carica una missione prima di iniziare.");
+            return;
+        }
+        highlightButton('start-mission')
         const historyResponse = await fetch(`/api/get_mission_path/${selectedMissionId}`);
         const historyData = await historyResponse.json();
 
@@ -49,10 +52,9 @@ document.getElementById('start-mission').addEventListener('click', async () => {
             map.setView(historyData.path[historyData.path.length - 1], 12);
         }
 
-        if (trackingInterval) clearInterval(trackingInterval); 
+        if (trackingInterval) clearInterval(trackingInterval);
 
         trackingInterval = setInterval(async () => {
-            //const response = await fetch('/api/simulate_position');
             const response = await fetch('/api/position');
             const data = await response.json();
 
@@ -68,7 +70,7 @@ document.getElementById('start-mission').addEventListener('click', async () => {
 
                 boatMarker.setLatLng([latest.lat, latest.lon]);
                 pathLine.setLatLngs(data.path.map(point => [point.lat, point.lon]));
-                // Aggiorna il percorso in tempo reale
+
                 let realTimeCoords = realTimePath.getLatLngs();
                 realTimeCoords.push([latest.lat, latest.lon]);
                 realTimePath.setLatLngs(realTimeCoords);
@@ -93,17 +95,19 @@ document.getElementById('start-mission').addEventListener('click', async () => {
                 });
             }
         }, 1000);
+
+        missionRunning = true;
+        button.textContent = "Stop Mission";
+    } else {
+        if (trackingInterval) {
+            clearInterval(trackingInterval);
+            trackingInterval = null;
+        }
+        missionRunning = false;
+        button.textContent = "Start Mission";
+        resetButtons();
     }
 });
-
-document.getElementById('stop-mission').addEventListener('click', () => {
-    if (trackingInterval) {
-        clearInterval(trackingInterval);
-        trackingInterval = null;
-        console.log("Tracking interrotto.");
-    }
-});
-
 
 document.getElementById("deleteMissionBtn").addEventListener("click", function() {
     const missionName = prompt("Enter the mission name to delete:");
@@ -125,8 +129,6 @@ document.getElementById('plan-mission').addEventListener('click', () => {
         document.getElementById('mission-controls').style.display = 'block';
         planActive = true;
     }
-    
-
 });
 
 document.getElementById('add-line').addEventListener('click', () => {
@@ -294,6 +296,20 @@ document.getElementById('clear-line').addEventListener('click', () => {
     showClearConfirmation();
 });
 
+document.getElementById('menu-toggle').addEventListener('click', () => {
+    let sidebar = document.getElementById('sidebar');
+    let menuToggle = document.getElementById('menu-toggle');
+
+    sidebar.classList.toggle('open');
+
+    // Sposta il pulsante assieme al menu
+    if (sidebar.classList.contains('open')) {
+        menuToggle.style.left = "250px"; // Stessa larghezza del menu
+    } else {
+        menuToggle.style.left = "20px";
+    }
+});
+
 function showClearConfirmation() {
     const confirmation = confirm("⚠️ Sei sicuro di voler eliminare tutte le linee? Questa operazione non può essere annullata.");
     if (confirmation) {
@@ -442,4 +458,24 @@ function pointToSegmentDistance(point, segmentStart, segmentEnd) {
     }
 
     return map.distance(point, closest);
+}
+
+function highlightButton(buttonId) {
+    let buttons = document.querySelectorAll(".button");
+
+    buttons.forEach(button => {
+        if (button.id === buttonId) {
+            button.style.backgroundColor = "red"; 
+        } else {
+            button.disabled = true;
+        }
+    });
+}
+function resetButtons() {
+    let buttons = document.querySelectorAll(".button");
+
+    buttons.forEach(button => {
+        button.style.backgroundColor = ""; 
+        button.disabled = false;
+    });
 }
