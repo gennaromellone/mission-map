@@ -143,22 +143,6 @@ document.getElementById('add-line').addEventListener('click', () => {
     map.on('click', addPointToSegment);
 });
 
-document.getElementById('remove-line').addEventListener('click', () => {
-    if (currentLine) {
-        currentLine.remove();
-        currentLine = null;
-        pointsCount = 0;
-        map.off('click', addPointToSegment);
-    }
-
-    removingMode = !removingMode;
-
-    if (removingMode) {
-        map.on('click', removeLine);
-    } else {
-        map.off('click', removeLine);
-    }
-});
 
 document.getElementById('create-mission').addEventListener('click', async () => {
     document.getElementById('save-popup').style.display = 'block';
@@ -175,6 +159,7 @@ document.getElementById('create-mission').addEventListener('click', async () => 
 
 document.getElementById('save-mission').addEventListener('click', async () => {
     document.getElementById('save-popup').style.display = 'block';
+    updateSaveButtonText();
 
     const response = await fetch('/api/get-users-boats');
     const data = await response.json();
@@ -195,27 +180,25 @@ document.getElementById('confirm-save').addEventListener('click', async () => {
         name: name,
         user_id: parseInt(userId),
         boat_id: parseInt(boatId),
-        path: JSON.stringify(drawnLines.map(line => line.getLatLngs()))
+        path: JSON.stringify(drawnLines.map(line => line.getLatLngs())) // Salviamo le coordinate delle linee
     };
 
     const url = selectedMissionId 
-        ? `/api/update-mission/${selectedMissionId}`
-        : `/api/save-mission`;
+        ? `/api/update-mission/${selectedMissionId}`  // Endpoint di update
+        : `/api/save-mission`; 
 
     await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(missionData)
     })
-    .then(response => response.json()) // Converti la risposta in JSON
+    .then(response => response.json()) 
     .then(data => {
-        
         if (data.mission_id) {
-            console.log(data);
             selectedMissionId = data.mission_id;
-            alert(`Mission '${missionName}' created successfully!\nMission ID: ${data.mission_id}`);
+            alert(`Mission '${name}' salvata con successo!\nMission ID: ${data.mission_id}`);
         } else {
-            alert("Updated Mission!");
+            alert("Missione aggiornata con successo!");
         }
     })
     .catch(error => console.error('Error:', error));
@@ -223,6 +206,7 @@ document.getElementById('confirm-save').addEventListener('click', async () => {
     document.getElementById('save-popup').style.display = 'none';
     document.getElementById('mission-name').innerText = `Mission: ${missionData.name}`;
 
+    updateSaveButtonText(); 
 });
 
 document.getElementById('load-mission').addEventListener('click', async () => {
@@ -272,6 +256,10 @@ document.getElementById('cancel-load').addEventListener('click', () => {
     document.getElementById('load-popup').style.display = 'none';
 });
 
+document.getElementById('cancel-save').addEventListener('click', () => {
+    document.getElementById('save-popup').style.display = 'none';
+});
+
 
 document.getElementById('export-mission').addEventListener('click', async () => {
     if (!selectedMissionId) {
@@ -281,6 +269,94 @@ document.getElementById('export-mission').addEventListener('click', async () => 
 
     window.location.href = `/api/export_mission/${selectedMissionId}`;
 });
+
+let editMode = false;
+let vertexMarkers = [];
+
+document.getElementById('edit-lines').addEventListener('click', () => {
+
+    editMode = !editMode;
+    if (editMode) {
+        enableEditing();
+        document.getElementById('add-line').disabled = editMode;
+        document.getElementById('clear-line').disabled = editMode;
+        document.getElementById('edit-lines').textContent = "Stop Editing";
+    } else {
+        disableEditing();
+        document.getElementById('edit-lines').textContent = "Edit Lines";
+
+        document.getElementById('add-line').disabled = false;
+        document.getElementById('clear-line').disabled = false;
+    }
+});
+
+document.getElementById('clear-line').addEventListener('click', () => {
+    showClearConfirmation();
+});
+
+function showClearConfirmation() {
+    const confirmation = confirm("⚠️ Sei sicuro di voler eliminare tutte le linee? Questa operazione non può essere annullata.");
+    if (confirmation) {
+        clearAllLines();
+    }
+}
+
+function updateSaveButtonText() {
+    const saveButton = document.getElementById('save-mission');
+    saveButton.textContent = selectedMissionId ? "Update" : "Save";
+}
+
+function clearAllLines() {
+    drawnLines.forEach(line => map.removeLayer(line));
+    drawnLines = [];
+
+    vertexMarkers.forEach(marker => map.removeLayer(marker));
+    vertexMarkers = [];
+
+}
+
+
+function enableEditing() {
+    // Rimuove i vecchi marcatori dei vertici
+    vertexMarkers.forEach(marker => map.removeLayer(marker));
+    vertexMarkers = [];
+
+    drawnLines.forEach(line => {
+        const latLngs = line.getLatLngs();
+        latLngs.forEach((latlng, index) => {
+            let vertex = L.marker(latlng, {
+                draggable: true,
+                icon: L.divIcon({
+                    className: "vertex-marker",
+                    html: "⬤",
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6]
+                })
+            }).addTo(map);
+
+            // Quando si trascina il vertice, aggiorna la linea
+            vertex.on('drag', function (e) {
+                latLngs[index] = e.target.getLatLng();
+                line.setLatLngs(latLngs);
+            });
+
+            // Rimuove il vertice al doppio clic
+            vertex.on('dblclick', function () {
+                if (!editMode) return;
+                map.removeLayer(vertex);
+                latLngs.splice(index, 1);
+                line.setLatLngs(latLngs);
+            });
+
+            vertexMarkers.push(vertex);
+        });
+    });
+}
+
+function disableEditing() {
+    vertexMarkers.forEach(marker => map.removeLayer(marker));
+    vertexMarkers = [];
+}
 
 function setSelectedMission(missionId) {
     selectedMissionId = missionId;
