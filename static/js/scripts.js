@@ -23,14 +23,17 @@ map.zoomControl.setPosition('topright');
 
 let selectedMissionId = null;
 let trackingInterval = null;
+let directionLine = L.polyline([], { color: 'yellow', weight: 2, opacity: 0.5}).addTo(map);
+
+updateDirectionLine(startPos[0], startPos[1], 0);
 
 let pathLine = L.polyline([], { color: 'blue' }).addTo(map);
 let realTimePath = L.polyline([], { color: 'red' }).addTo(map);
 
-let drawnLines = []; // Array per memorizzare i segmenti
-let currentLine = null; // Linea attuale in fase di disegno
-let removingMode = false; // Modalità di rimozione
-let pointsCount = 0; // Contatore per i punti della linea
+let drawnLines = []; 
+let currentLine = null; 
+let removingMode = false;
+let pointsCount = 0;
 let previousPoint = null;
 
 let missionRunning = false;
@@ -57,31 +60,28 @@ document.getElementById('start-mission').addEventListener('click', async () => {
         trackingInterval = setInterval(async () => {
             const response = await fetch('/api/position');
             const data = await response.json();
-
+        
             if (data.path && data.path.length > 0) {
                 const latest = data.path[data.path.length - 1];
-
+        
                 if (previousPoint) {
                     const deltaX = latest.lon - previousPoint.lon;
                     const deltaY = latest.lat - previousPoint.lat;
-                    const angle = Math.atan2(-deltaY, deltaX) * (180 / Math.PI) + 90;
+                    const angle = (Math.atan2(deltaY, deltaX) * (180 / Math.PI) + 360) % 360;
+        
+                    boatMarker.setLatLng([latest.lat, latest.lon]);
                     boatMarker.setRotationAngle(angle);
+                    
+                    map.panTo([latest.lat, latest.lon]);
+
+                    // Aggiorna la linea direzionale per coprire l'intera finestra
+                    updateDirectionLine(latest.lat, latest.lon, angle);
                 }
-
-                boatMarker.setLatLng([latest.lat, latest.lon]);
-                pathLine.setLatLngs(data.path.map(point => [point.lat, point.lon]));
-
-                let realTimeCoords = realTimePath.getLatLngs();
-                realTimeCoords.push([latest.lat, latest.lon]);
-                realTimePath.setLatLngs(realTimeCoords);
-
-                map.setView([latest.lat, latest.lon]);
-
+        
+                previousPoint = { lat: latest.lat, lon: latest.lon };
                 document.getElementById('current-lat').textContent = latest.lat.toFixed(6);
                 document.getElementById('current-lon').textContent = latest.lon.toFixed(6);
                 document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
-
-                previousPoint = { lat: latest.lat, lon: latest.lon };
 
                 await fetch('/api/update_position', {
                     method: 'POST',
@@ -478,4 +478,21 @@ function resetButtons() {
         button.style.backgroundColor = ""; 
         button.disabled = false;
     });
+}
+function updateDirectionLine(lat, lon, angle) {
+    const bounds = map.getBounds();
+    const northEast = bounds.getNorthEast();
+    const southWest = bounds.getSouthWest();
+
+    const maxDistance = Math.max(
+        Math.abs(northEast.lat - southWest.lat),
+        Math.abs(northEast.lng - southWest.lng)
+    );
+
+    const lineLength = maxDistance * 1.2; // Estensione oltre lo schermo
+
+    const directionEndLat = lat + (lineLength * Math.cos(angle * Math.PI / 180));
+    const directionEndLon = lon + (lineLength * Math.sin(angle * Math.PI / 180));
+
+    directionLine.setLatLngs([[lat, lon], [directionEndLat, directionEndLon]]);
 }
