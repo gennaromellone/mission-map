@@ -1,9 +1,11 @@
 const startPos = [40.855640711460936, 14.284214343900299]
 
-const map = L.map('map').setView(startPos, 10);
+const map = L.map('map').setView(startPos, 15);
 
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
+//L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+L.tileLayer('/api/tiles/{z}/{x}/{y}.webp' ,{
+    maxZoom: 20,
+    minZoom: 15,
     attribution: 'Tiles &copy; Esri'
 }).addTo(map);
 

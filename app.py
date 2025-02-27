@@ -1,11 +1,15 @@
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, send_from_directory, abort
 from flask_sqlalchemy import SQLAlchemy
 
 import time
 import random
-import csv
+import json
 import re
+import os
 
+import serial.tools.list_ports
+
+from broadcaster_v2 import Device, NMEA0183, Depth
 from broadcaster import MsgReceiver
 
 app = Flask(__name__)
@@ -15,6 +19,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 broadcast = MsgReceiver()
 saved_lines = []
+devices = {}
 
 last_position = {
     'lat': 40.855640711460936,
@@ -46,9 +51,85 @@ class USVData(db.Model):
     longitude = db.Column(db.Float, nullable=False)
     depth = db.Column(db.Float, nullable=False)
 
+def initialize_devices():
+    """Inizializza i dispositivi basandosi sul file di configurazione."""
+    global devices
+    devices.clear()
+    try:
+        with open("config.json", "r") as file:
+            config = json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        print("[ERRORE] Impossibile caricare il file di configurazione.")
+        config = {}
+    
+    available_ports = Device.list_serial_ports()
+    
+    for device_name, device_config in config.items():
+        device_type = device_config.get("type", "Sconosciuto")
+        
+        if device_type == "NMEA0183":
+            device = NMEA0183(device_config)
+        else:
+            device = Depth(device_config)
+        
+        device.find_device_port(available_ports)
+        devices[device_name] = device
+
+initialize_devices()
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/configuration')
+def configuration():
+    return render_template('config.html')
+devices = {}
+
+@app.route("/devices", methods=["GET"])
+def get_devices():
+    """Restituisce la lista dei dispositivi inizializzati."""
+    return jsonify({"devices": list(devices.keys())})
+
+@app.route("/device/<device_name>", methods=["GET"])
+def read_device(device_name):
+    """Restituisce i dati più recenti letti da un dispositivo."""
+    device = devices.get(device_name)
+    if device:
+        return jsonify(device.get_latest_data())
+    return jsonify({"error": "Dispositivo non trovato"}), 404
+
+def list_available_ports():
+    """Restituisce un elenco delle porte seriali disponibili."""
+    ports = {port.device: port.description for port in serial.tools.list_ports.comports()}
+    return ports
+@app.route("/available_ports", methods=["GET"])
+def get_available_ports():
+    """Endpoint per ottenere le porte seriali disponibili."""
+    return jsonify(list_available_ports())
+
+@app.route("/config", methods=["GET"])
+def get_config():
+    """Restituisce il file di configurazione."""
+    try:
+        with open("config.json", "r") as file:
+            config = json.load(file)
+        return jsonify(config)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return jsonify({"error": "Impossibile caricare la configurazione"}), 500
+
+@app.route("/config", methods=["POST"])
+def update_config():
+    """Aggiorna il file di configurazione e reinizializza i dispositivi."""
+    try:
+        new_config = request.json
+        with open("config.json", "w") as file:
+            json.dump(new_config, file, indent=4)
+        initialize_devices()
+        return jsonify({"message": "Configurazione aggiornata e dispositivi reinizializzati"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/update_position', methods=['POST'])
 def update_position():
@@ -78,23 +159,21 @@ def get_simulated_position():
 
 @app.route('/api/position', methods=['GET'])
 def get_position():
-    # Get depth
-    try:
-        depth = broadcast.getDepth()
-        last_position['depth'] = depth
-    except:
-        print("ERROR: No depth!")
+    last_position = {}
 
-    # Get GPS
-    try:
-        #gps = broadcast.getGPS()
-        msg = broadcast.getMessage(simulate=True)
-        last_position['lat'] = msg['mLatGPS']
-        last_position['lon'] = msg['mLonGPS']
-    except:
-        #msg = "Waiting IMU"
-        print("ERROR: No GPS!")
+    for device_name, device in devices.items():
+        data = device.get_latest_data()
+        if device_name.lower().startswith("gps"):
+            lat = data.get("msg", {}).get("lat", None)
+            lon = data.get("msg", {}).get("lon", None)
+            lat_dir = data.get("msg", {}).get("lat_dir", None)
+            lon_dir = data.get("msg", {}).get("lon_dir", None)
 
+            last_position['lat'] = f"{lat} {lat_dir}"
+            last_position['lon'] = f"{lon} {lon_dir}"
+            
+        elif device_name.lower().startswith("depth"):
+            last_position['depth'] = data.get("msg", {}).get("depth", None)
 
     return jsonify({"path": [last_position]})
 
@@ -210,6 +289,12 @@ def populate():
     db.session.commit()
 
     return jsonify({"message": "Random user and boat added!"})
+
+TILE_FOLDER = "static/tiles"
+@app.route('/api/tiles/<int:z>/<int:x>/<int:y>.webp')
+def get_tile(z, x, y):
+
+    return send_from_directory(TILE_FOLDER, f"{z}/{x}/{y}.webp")
 
 
 if __name__ == '__main__':

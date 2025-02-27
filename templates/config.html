@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Configurazione</title>
+    <script>
+        async function loadConfig() {
+            try {
+                const response = await fetch('/config');
+                const config = await response.json();
+                if (config.error) {
+                    alert("Errore nel caricamento della configurazione: " + config.error);
+                    return;
+                }
+                displayConfig(config);
+                loadAvailablePorts();
+            } catch (error) {
+                alert("Errore di connessione con il server.");
+            }
+        }
+
+        async function loadAvailablePorts() {
+            try {
+                const response = await fetch('/available_ports');
+                const ports = await response.json();
+                document.getElementById('availablePorts').textContent = JSON.stringify(ports, null, 2);
+            } catch (error) {
+                document.getElementById('availablePorts').textContent = "Errore nel caricamento delle porte.";
+            }
+        }
+
+        function displayConfig(config) {
+            const container = document.getElementById('devicesContainer');
+            container.innerHTML = '';
+            Object.entries(config).forEach(([deviceName, deviceConfig]) => {
+                addDeviceBox(deviceName, deviceConfig);
+            });
+        }
+
+        function addDeviceBox(name = '', config = {}) {
+            const container = document.getElementById('devicesContainer');
+            const box = document.createElement('div');
+            box.className = 'device-box';
+            box.innerHTML = `
+                <div class="labels">
+                    <span>Nome Dispositivo</span>
+                    <span>Tipo</span>
+                    <span>Porta</span>
+                    <span>Baudrate</span>
+                    <span>Descrizione</span>
+                </div>
+                <div class="inputs">
+                    <input type="text" value="${name}" class="device-name"/>
+                    <select class="device-type">
+                        <option value="NMEA0183" ${config.type === "NMEA0183" ? "selected" : ""}>NMEA0183</option>
+                        <option value="Depth" ${config.type === "Depth" ? "selected" : ""}>Depth</option>
+                    </select>
+                    <input type="text" value="${config.port || ''}" class="device-port"/>
+                    <input type="number" value="${config.baudrate || ''}" class="device-baudrate"/>
+                    <input type="text" value="${config.description || ''}" class="device-description"/>
+                </div>
+                <button onclick="removeDevice(this)">-</button>
+            `;
+            container.appendChild(box);
+        }
+
+        function removeDevice(button) {
+            button.parentElement.remove();
+        }
+
+        async function saveConfig() {
+            try {
+                const devices = {};
+                document.querySelectorAll('.device-box').forEach(box => {
+                    const name = box.querySelector('.device-name').value;
+                    if (name) {
+                        devices[name] = {
+                            type: box.querySelector('.device-type').value,
+                            port: box.querySelector('.device-port').value,
+                            baudrate: box.querySelector('.device-baudrate').value,
+                            description: box.querySelector('.device-description').value
+                        };
+                    }
+                });
+                const response = await fetch('/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(devices)
+                });
+                const result = await response.json();
+                if (result.error) {
+                    alert("Errore nel salvataggio: " + result.error);
+                } else {
+                    alert("Configurazione salvata con successo!");
+                    loadConfig();
+                }
+            } catch (error) {
+                alert("Errore di connessione con il server.");
+            }
+        }
+
+        window.onload = loadConfig;
+    </script>
+    <style>
+        .device-box {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .labels {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .inputs {
+            display: flex;
+            justify-content: space-between;
+        }
+        .inputs input, .inputs select {
+            width: 18%;
+        }
+        #availablePortsBox {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #aaa;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gestione Configurazione</h1>
+    <div id="devicesContainer"></div>
+    <button onclick="addDeviceBox()">Aggiungi Dispositivo</button>
+    <br>
+    <button onclick="saveConfig()">Salva Configurazione</button>
+    <br>
+    <div id="availablePortsBox">
+        <h3>Dispositivi USB Rilevati</h3>
+        <pre id="availablePorts">Caricamento...</pre>
+    </div>
+    <a href="index.html">Torna alla Home</a>
+</body>
+</html>
