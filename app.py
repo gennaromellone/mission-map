@@ -74,6 +74,7 @@ def initialize_devices():
         
         device.find_device_port(available_ports)
         devices[device_name] = device
+        print(devices)
 
 initialize_devices()
 
@@ -85,7 +86,6 @@ def index():
 @app.route('/configuration')
 def configuration():
     return render_template('config.html')
-devices = {}
 
 @app.route("/devices", methods=["GET"])
 def get_devices():
@@ -160,20 +160,17 @@ def get_simulated_position():
 @app.route('/api/position', methods=['GET'])
 def get_position():
     last_position = {}
-
     for device_name, device in devices.items():
         data = device.get_latest_data()
+        print(data)
         if device_name.lower().startswith("gps"):
-            lat = data.get("msg", {}).get("lat", None)
-            lon = data.get("msg", {}).get("lon", None)
-            lat_dir = data.get("msg", {}).get("lat_dir", None)
-            lon_dir = data.get("msg", {}).get("lon_dir", None)
-
-            last_position['lat'] = f"{lat} {lat_dir}"
-            last_position['lon'] = f"{lon} {lon_dir}"
+            last_position['lat'] = float(data.get("msg", {}).get("lat", 0.0))
+            last_position['lon'] = float(data.get("msg", {}).get("lon", 0.0))
+            last_position['lat_dir'] = data.get("msg", {}).get("lat_dir", "")
+            last_position['lon_dir'] = data.get("msg", {}).get("lon_dir", "")
             
         elif device_name.lower().startswith("depth"):
-            last_position['depth'] = data.get("msg", {}).get("depth", None)
+            last_position['depth'] = data.get("msg", {}).get("depth", 0.0)
 
     return jsonify({"path": [last_position]})
 
