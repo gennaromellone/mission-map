@@ -39,7 +39,7 @@ class Device:
         try:
             with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
                 print(f"[INFO] Connessione a {self.port} aperta.")
-                while self.running:
+                while self.running:                    
                     line = ser.readline().decode(errors='ignore').strip()
                     if line:
                         self.latest_data = self.process_data(line)
@@ -70,7 +70,18 @@ class NMEA0183(Device):
         """Effettua il parsing di un pacchetto NMEA0183."""
         try:
             parsed_data = pynmea2.parse(packet)
-            return {"msg": parsed_data.__dict__ if parsed_data else {}}
+            
+            if "RMC" in repr(parsed_data):
+                msg = {
+                    'lat': 0.0000 if parsed_data.lat == "" else float(parsed_data.lat),
+                    'lat_dir': parsed_data.lat_dir,
+                    'lon_dir': parsed_data.lon_dir,
+                    'lon': 0.0000 if parsed_data.lon == "" else float(parsed_data.lon),
+                    }
+            else:
+                msg = {}
+            return {"msg": msg}
+            #return {"msg": parsed_data.__dict__ if parsed_data else {}}
         except pynmea2.ParseError:
             return {"msg": {"error": "Parsing fallito"}}
 
