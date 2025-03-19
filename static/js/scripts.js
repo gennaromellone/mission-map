@@ -81,8 +81,8 @@ document.getElementById('start-mission').addEventListener('click', async () => {
                 }
         
                 previousPoint = { lat: latest.lat, lon: latest.lon };
-                document.getElementById('current-lat').textContent = latest.lat.toFixed(6);
-                document.getElementById('current-lon').textContent = latest.lon.toFixed(6);
+                document.getElementById('current-lat').textContent = latest.lat.toFixed(6) + latest.lat_dir;
+                document.getElementById('current-lon').textContent = latest.lon.toFixed(6) + latest.lon_dir;
                 document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
 
                 await fetch('/api/update_position', {
