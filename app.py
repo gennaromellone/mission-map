@@ -163,14 +163,24 @@ def get_position():
     for device_name, device in devices.items():
         data = device.get_latest_data()
         print(data)
-        if device_name.lower().startswith("gps"):
-            last_position['lat'] = float(data.get("msg", {}).get("lat", 0.0))
-            last_position['lon'] = float(data.get("msg", {}).get("lon", 0.0))
-            last_position['lat_dir'] = data.get("msg", {}).get("lat_dir", "")
-            last_position['lon_dir'] = data.get("msg", {}).get("lon_dir", "")
-            
-        elif device_name.lower().startswith("depth"):
-            last_position['depth'] = data.get("msg", {}).get("depth", 0.0)
+        if "msg" in data:
+            if device_name.lower().startswith("gps"):
+                if 'error' in data['msg']:
+                    last_position['lat'] = 0.0
+                    last_position['lon'] = 0.0
+                    last_position['lat_dir'] = 'X'
+                    last_position['lon_dir'] = 'X'
+                else:
+                    last_position['lat'] = float(data.get("msg", {}).get("lat", 0.0))
+                    last_position['lon'] = float(data.get("msg", {}).get("lon", 0.0))
+                    last_position['lat_dir'] = data.get("msg", {}).get("lat_dir", "")
+                    last_position['lon_dir'] = data.get("msg", {}).get("lon_dir", "")
+                
+            elif device_name.lower().startswith("depth"):
+                if 'error' in data['msg']:
+                    last_position['depth'] = 0.0
+                else:
+                    last_position['depth'] = data.get("msg", {}).get("depth", 0.0)
 
     return jsonify({"path": [last_position]})
 
@@ -297,4 +307,4 @@ def get_tile(z, x, y):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=80)
