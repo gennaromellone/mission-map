@@ -52,7 +52,7 @@ class Device:
 
     def get_latest_data(self):
         """Restituisce l'ultimo dato letto."""
-        return self.latest_data or {"msg": "Nessun dato disponibile"}
+        return self.latest_data or {"msg": {"error": "Nessun dato disponibile"}}
 
     def stop(self):
         """Ferma il thread di lettura."""
@@ -97,7 +97,7 @@ class Depth(Device):
         values = packet.split()
         if len(values) > 5:
             try:
-                return {"msg": {"depth": float(values[5])}}
+                return {"msg": {"depth": float(values[1])}}
             except ValueError:
                 return {"msg": {"depth": None}}
         return {"msg": {"depth": None}}
