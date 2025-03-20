@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mission Planner</title>
     <link rel="stylesheet" href="/static/css/styles.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="/static/css/leaflet.css">
 </head>
 <body>
     <div id="mission-name">Mission: None</div>
@@ -29,11 +29,13 @@
         <button class="button" style="margin-top: 25px;" id="save-mission">Save</button>
         <button class="button" id="load-mission">Load</button>
         <button class="button" id="export-mission">Export</button>
+        <button class="button" onclick="location.href = '/configuration'" style="margin-top: 25px;" id="setting-mission">Settings</button>
+        
     </div>
 
     <div id="map">
         <div id="coordinates">
-            Lat: <span id="current-lat">--</span>, Lon: <span id="current-lon">--</span>, Depth: <span id="current-depth">--</span> m
+            Lat: <span id="current-lat">--</span>, Lon: <span id="current-lon">--</span>, Depth: <span id="current-depth">--</span>
         </div>
     </div>
 
