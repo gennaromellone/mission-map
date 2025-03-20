@@ -13,7 +13,7 @@ from broadcaster_v2 import Device, NMEA0183, Depth
 from broadcaster import MsgReceiver
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///argo_mission.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mission_map.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -26,6 +26,7 @@ last_position = {
     'lon':  14.284214343900299,
     'depth': 0.0
     }
+TILE_FOLDER = "/home/argo/tiles"
 
 # Database models
 class User(db.Model):
@@ -288,23 +289,24 @@ def delete_mission(mission_name):
 
 @app.route('/api/populateDB', methods=['GET'])
 def populate():
-    new_user = User(name="Captain Jack")
+    new_user = User(name="IMTG")
     db.session.add(new_user)
-    new_boat = Boat(name="Black Pearl")
+    new_boat = Boat(name="Boat1")
     db.session.add(new_boat)
 
     db.session.commit()
 
-    return jsonify({"message": "Random user and boat added!"})
+    return jsonify({"message": "User and boat added!"})
 
-TILE_FOLDER = "static/tiles"
+
 @app.route('/api/tiles/<int:z>/<int:x>/<int:y>.webp')
 def get_tile(z, x, y):
-
-    return send_from_directory(TILE_FOLDER, f"{z}/{x}/{y}.webp")
+    response = send_from_directory(TILE_FOLDER, f"{z}/{x}/{y}.webp")
+    
+    return response
 
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(host='0.0.0.0', port=80)
+    app.run(host='0.0.0.0', port=80, threaded=True)
