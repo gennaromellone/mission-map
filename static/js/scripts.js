@@ -2,10 +2,20 @@ const startPos = [40.855640711460936, 14.284214343900299]
 
 const map = L.map('map').setView(startPos, 15);
 
+XMLHttpRequest.prototype.open = (function(open) {
+    return function(method, url, async, user, password) {
+        console.log("Leaflet sta cercando di caricare:", url);
+        return open.apply(this, arguments);
+    };
+})(XMLHttpRequest.prototype.open);
+
 //L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
 L.tileLayer('/api/tiles/{z}/{x}/{y}.webp' ,{
-    maxZoom: 20,
-    minZoom: 15,
+    maxZoom: 19,
+    minZoom: 13,
+    tms: false,  // Importante: Mantieni il valore corretto in base alla fonte delle tiles
+    keepBuffer: 2,  // Mantiene un buffer per evitare che le tile vengano perse
+    errorTileUrl: '/static/icons/missing_tile.png',
     attribution: 'Tiles &copy; Esri'
 }).addTo(map);
 
@@ -21,6 +31,7 @@ let boatMarker = L.marker(startPos,
     rotationAngle: 0, 
     rotationOrigin: 'center'
 }).addTo(map);
+
 map.zoomControl.setPosition('topright');
 
 let selectedMissionId = null;
