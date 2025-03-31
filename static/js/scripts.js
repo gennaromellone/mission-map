@@ -51,6 +51,52 @@ let previousPoint = null;
 
 let missionRunning = false;
 
+if (!missionRunning) {
+    livePosition();
+}
+
+function livePosition(updatePosition=false){
+    setInterval(async () => {
+        const response = await fetch('/api/position');
+        const data = await response.json();
+        
+        if (data.path && data.path.length > 0) {
+            const latest = data.path[data.path.length - 1];
+            if (latest.lon > 0 && latest.lat > 0){
+                if (previousPoint) {
+                    const angle = parseFloat(latest.degrees || 0.0);
+                
+                    boatMarker.setLatLng([latest.lat, latest.lon]);
+                    boatMarker.setRotationAngle(angle);
+                
+                    //map.panTo([latest.lat, latest.lon]);
+                
+                    updateDirectionLine(latest.lat, latest.lon, angle);
+                }
+                
+        
+                previousPoint = { lat: latest.lat, lon: latest.lon };
+                document.getElementById('current-lat').textContent = latest.lat + latest.lat_dir;
+                document.getElementById('current-lon').textContent = latest.lon + latest.lon_dir;
+                document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
+                
+                if (updatePosition){
+                    await fetch('/api/update_position', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            latitude: latest.lat,
+                            longitude: latest.lon,
+                            depth: latest.depth,
+                            mission_id: selectedMissionId
+                        })
+                    });
+                }
+            }
+        }
+    }, 1000);
+}
+
 document.getElementById('start-mission').addEventListener('click', async () => {
     const button = document.getElementById('start-mission');
 
@@ -73,39 +119,37 @@ document.getElementById('start-mission').addEventListener('click', async () => {
         trackingInterval = setInterval(async () => {
             const response = await fetch('/api/position');
             const data = await response.json();
-        
+            
             if (data.path && data.path.length > 0) {
                 const latest = data.path[data.path.length - 1];
-        
-                if (previousPoint) {
-                    const deltaX = latest.lon - previousPoint.lon;
-                    const deltaY = latest.lat - previousPoint.lat;
-                    const angle = (Math.atan2(deltaY, deltaX) * (180 / Math.PI) + 360) % 360;
-        
-                    boatMarker.setLatLng([latest.lat, latest.lon]);
-                    boatMarker.setRotationAngle(angle);
+                if (latest.lon > 0 && latest.lat > 0){
+                    if (previousPoint) {
+                        const angle = parseFloat(latest.degrees || 0.0);
                     
-                    map.panTo([latest.lat, latest.lon]);
-
-                    // Aggiorna la linea direzionale per coprire l'intera finestra
-                    updateDirectionLine(latest.lat, latest.lon, angle);
+                        boatMarker.setLatLng([latest.lat, latest.lon]);
+                        boatMarker.setRotationAngle(angle);
+                    
+                        map.panTo([latest.lat, latest.lon]);
+                    
+                        updateDirectionLine(latest.lat, latest.lon, angle);
+                    }                    
+            
+                    previousPoint = { lat: latest.lat, lon: latest.lon };
+                    document.getElementById('current-lat').textContent = latest.lat + latest.lat_dir;
+                    document.getElementById('current-lon').textContent = latest.lon + latest.lon_dir;
+                    document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
+    
+                    await fetch('/api/update_position', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            latitude: latest.lat,
+                            longitude: latest.lon,
+                            depth: latest.depth,
+                            mission_id: selectedMissionId
+                        })
+                    });
                 }
-        
-                previousPoint = { lat: latest.lat, lon: latest.lon };
-                document.getElementById('current-lat').textContent = latest.lat.toFixed(6) + latest.lat_dir;
-                document.getElementById('current-lon').textContent = latest.lon.toFixed(6) + latest.lon_dir;
-                document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
-
-                await fetch('/api/update_position', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        latitude: latest.lat,
-                        longitude: latest.lon,
-                        depth: latest.depth,
-                        mission_id: selectedMissionId
-                    })
-                });
             }
         }, 1000);
 
