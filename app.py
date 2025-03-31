@@ -158,32 +158,53 @@ def get_simulated_position():
 
     return jsonify({"path": [random_position]})
 
+
+last_valid_position = {
+    'lat': 0.0,
+    'lon': 0.0,
+    'lat_dir': 'X',
+    'lon_dir': 'X',
+    'depth': 0.0,
+    'degrees': 0
+}
+
 @app.route('/api/position', methods=['GET'])
 def get_position():
-    last_position = {}
+    global last_valid_position
+    last_position = last_valid_position.copy()
+
     for device_name, device in devices.items():
         data = device.get_latest_data()
-        print(data)
         if "msg" in data:
+            print(data)
             if device_name.lower().startswith("gps"):
-                if 'error' in data['msg']:
-                    last_position['lat'] = 0.0
-                    last_position['lon'] = 0.0
-                    last_position['lat_dir'] = 'X'
-                    last_position['lon_dir'] = 'X'
-                else:
-                    last_position['lat'] = float(data.get("msg", {}).get("lat", 0.0))
-                    last_position['lon'] = float(data.get("msg", {}).get("lon", 0.0))
-                    last_position['lat_dir'] = data.get("msg", {}).get("lat_dir", "")
-                    last_position['lon_dir'] = data.get("msg", {}).get("lon_dir", "")
-                
-            elif device_name.lower().startswith("depth"):
-                if 'error' in data['msg']:
-                    last_position['depth'] = 0.0
-                else:
-                    last_position['depth'] = data.get("msg", {}).get("depth", 0.0)
+                statusGPS = 'err'
+                if 'error' not in data['msg']:
+                    lat = float(data.get("msg", {}).get("lat", 0.0))
+                    lon = float(data.get("msg", {}).get("lon", 0.0))
+                    lat_dir = data.get("msg", {}).get("lat_dir", "")
+                    lon_dir = data.get("msg", {}).get("lon_dir", "")
+                    degrees = data.get("msg", {}).get("degrees", "")
+                    if lat != 0.0 and lon != 0.0:
+                        statusGPS = 'ok'
+                        last_valid_position['lat'] = lat
+                        last_valid_position['lon'] = lon
+                        last_valid_position['degrees'] = degrees
+                        last_valid_position['lat_dir'] = lat_dir
+                        last_valid_position['lon_dir'] = lon_dir
+                    
+                last_valid_position['statusGPS'] = statusGPS
 
-    return jsonify({"path": [last_position]})
+            elif device_name.lower().startswith("depth"):
+                statusDepth = 'err'
+                if 'error' not in data['msg']:
+                    depth = data.get("msg", {}).get("depth", 0.0)
+                    if depth != 0.0:
+                        last_valid_position['depth'] = depth
+                        statusDepth = 'ok'
+                last_valid_position['statusDepth'] = statusDepth
+
+    return jsonify({"path": [last_valid_position]})
 
 @app.route('/api/save-mission', methods=['POST'])
 def save_mission():
@@ -309,4 +330,4 @@ def get_tile(z, x, y):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(host='0.0.0.0', port=80, threaded=True)
+    app.run(host='0.0.0.0', port=80, threaded=False)
