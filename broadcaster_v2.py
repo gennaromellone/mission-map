@@ -42,7 +42,9 @@ class Device:
                 while self.running:                    
                     line = ser.readline().decode(errors='ignore').strip()
                     if line:
-                        self.latest_data = self.process_data(line)
+                        processed = self.process_data(line)
+                        if processed != None:
+                            self.latest_data = processed
         except serial.SerialException as e:
             print(f"[ERRORE] Impossibile connettersi a {self.port}: {e}")
 
@@ -52,7 +54,7 @@ class Device:
 
     def get_latest_data(self):
         """Restituisce l'ultimo dato letto."""
-        return self.latest_data or {"msg": {"error": "Nessun dato disponibile"}}
+        return self.latest_data or {"msg": {"error": f"{self.type}: Nessun dato disponibile"}}
 
     def stop(self):
         """Ferma il thread di lettura."""
@@ -65,25 +67,42 @@ class NMEA0183(Device):
     def __init__(self, device_config):
         super().__init__(device_config)
         self.pattern = self.PATTERN
+        self.gga_data = {}
+        self.vtg_data = {}
 
     def process_data(self, packet):
-        """Effettua il parsing di un pacchetto NMEA0183."""
+        """Effettua il parsing di un pacchetto NMEA0183 e restituisce i dati disponibili."""
         try:
             parsed_data = pynmea2.parse(packet)
-            
-            if "RMC" in repr(parsed_data):
-                msg = {
-                    'lat': 0.0000 if parsed_data.lat == "" else float(parsed_data.lat),
+
+            if "GGA" in str(parsed_data):
+                self.gga_data = {
+                    'lat': 0.0000 if parsed_data.latitude == "" else float("{:.6f}".format(parsed_data.latitude)),
                     'lat_dir': parsed_data.lat_dir,
                     'lon_dir': parsed_data.lon_dir,
-                    'lon': 0.0000 if parsed_data.lon == "" else float(parsed_data.lon),
-                    }
-            else:
-                msg = {}
-            return {"msg": msg}
-            #return {"msg": parsed_data.__dict__ if parsed_data else {}}
+                    'lon': 0.0000 if parsed_data.longitude == "" else float("{:.6f}".format(parsed_data.longitude)),
+                }
+
+            elif "VTG" in str(parsed_data):
+                data = str(parsed_data).split(',')
+                degrees = 0.0 if data[1] == "" else float(data[1])
+                self.vtg_data = {'degrees': degrees}
+
+            # Costruiamo un unico dizionario da restituire
+            combined_data = {}
+            if self.gga_data:
+                combined_data.update(self.gga_data)
+            if self.vtg_data:
+                combined_data.update(self.vtg_data)
+
+            if combined_data:
+                return {'msg': combined_data}
+
         except pynmea2.ParseError:
-            return {"msg": {"error": "Parsing fallito"}}
+            return {"msg": {"error": "Parsing NMEA fallito"}}
+
+        return None
+
 
 class Depth(Device):
     PATTERN = r"^[0-9]+\s[0-9]+\.[0-9]+.*$"
@@ -99,5 +118,5 @@ class Depth(Device):
             try:
                 return {"msg": {"depth": float(values[1])}}
             except ValueError:
-                return {"msg": {"depth": None}}
-        return {"msg": {"depth": None}}
+                return {"msg": {"error": "Valore DEPTH non corretto!"}}
+        return {"msg": {"error": "Pacchetto DEPTH non corretto!"}}
