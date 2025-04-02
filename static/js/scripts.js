@@ -1,101 +1,279 @@
-const startPos = [40.855640711460936, 14.284214343900299]
-
-const map = L.map('map').setView(startPos, 15);
-
-XMLHttpRequest.prototype.open = (function(open) {
-    return function(method, url, async, user, password) {
-        console.log("Leaflet sta cercando di caricare:", url);
-        return open.apply(this, arguments);
-    };
-})(XMLHttpRequest.prototype.open);
-
-//L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-L.tileLayer('/api/tiles/{z}/{x}/{y}.webp' ,{
-    maxZoom: 19,
-    minZoom: 13,
-    tms: false,  // Importante: Mantieni il valore corretto in base alla fonte delle tiles
-    keepBuffer: 2,  // Mantiene un buffer per evitare che le tile vengano perse
-    errorTileUrl: '/static/icons/missing_tile.png',
-    attribution: 'Tiles &copy; Esri'
-}).addTo(map);
-
-const boatIcon = L.icon({
-    iconUrl: 'static/icons/boat.png',
-    iconSize: [80, 80],
-    iconAnchor: [40, 40]
-});
-
-let boatMarker = L.marker(startPos, 
-    {
-    icon: boatIcon,
-    rotationAngle: 0, 
-    rotationOrigin: 'center'
-}).addTo(map);
-
-map.zoomControl.setPosition('topright');
 
 let selectedMissionId = null;
 let trackingInterval = null;
-let directionLine = L.polyline([], { color: 'yellow', weight: 2, opacity: 0.5}).addTo(map);
-
-updateDirectionLine(startPos[0], startPos[1], 0);
-
-let pathLine = L.polyline([], { color: 'blue' }).addTo(map);
-let realTimePath = L.polyline([], { color: 'red' }).addTo(map);
-
-let drawnLines = []; 
-let currentLine = null; 
-let removingMode = false;
-let pointsCount = 0;
-let previousPoint = null;
-
 let missionRunning = false;
+let drawingMode = false;
+let editMode = false;
+let drawnLines = [];
+let currentLineCoords = [];
+let activeMissionLines = [];
+let currentLineIndex = 0;
+let lastValidAngle = null;
+
+let previousPoint = { lon: 14.284214343900299, lat: 40.855640711460936 };
+
+const map = new maplibregl.Map({
+    container: 'map',
+    style: {
+        version: 8,
+        sources: {
+            "offline-tiles": {
+                type: "raster",
+                tiles: ["/api/tiles/{z}/{x}/{y}.webp"],
+                tileSize: 256,
+                attribution: "Tiles &copy; Esri"
+            },
+            "missions": {
+                type: "geojson",
+                data: { type: "FeatureCollection", features: [] }
+            },
+            "realtime-path": {
+                type: "geojson",
+                data: { type: "FeatureCollection", features: [] }
+            },
+            "direction-line": {
+                type: "geojson",
+                data: { type: "FeatureCollection", features: [] }
+            },
+            "direction-line-rotating": {
+                type: "geojson",
+                data: { type: "FeatureCollection", features: [] }
+            },
+            "current-line": {
+                type: "geojson",
+                data: {
+                    type: "FeatureCollection",
+                    features: []
+                }
+            },
+        },
+        layers: [
+            { id: "offline-layer", type: "raster", source: "offline-tiles" },
+            {
+                id: "current-line-layer",
+                type: "line",
+                source: "current-line",
+                paint: {
+                    "line-color": "orange",
+                    "line-width": 3
+                }
+            },
+            {
+                id: "mission-path",
+                type: "line",
+                source: "missions",
+                paint: { "line-color": "blue", "line-width": 3 }
+            },
+            {
+                id: "realtime-path-line",
+                type: "line",
+                source: "realtime-path",
+                paint: { "line-color": "red", "line-width": 3 }
+            },
+            {
+                id: "direction-line",
+                type: "line",
+                source: "direction-line",
+                paint: { "line-color": "yellow", "line-width": 5, "line-opacity": 0.9 }
+            },
+            {
+                id: "direction-line-rotating",
+                type: "line",
+                source: "direction-line-rotating",
+                paint: {
+                    "line-color": "orange",
+                    "line-width": 5,
+                    "line-opacity": 0.9
+                }
+            }
+        ]
+    },
+    minZoom: 10,
+    maxZoom: 20,
+    center: previousPoint,
+    zoom: 15,
+    bearing: 0
+});
+
+map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
+map.on('load', () => {
+
+    updateDirectionLine(previousPoint.lat, previousPoint.lon);
+    map.addSource('mission-lines', {
+        type: 'geojson',
+        data: {
+            type: 'FeatureCollection',
+            features: []
+        }
+    });
+    
+    map.addLayer({
+        id: 'mission-lines-layer',
+        type: 'line',
+        source: 'mission-lines',
+        paint: {
+            'line-color': 'orange',
+            'line-width': 3
+        }
+    });
+
+    map.addSource('active-line', {
+        type: 'geojson',
+        data: {
+            type: 'FeatureCollection',
+            features: []
+        }
+    });
+    
+    map.addLayer({
+        id: 'active-line-layer',
+        type: 'line',
+        source: 'active-line',
+        paint: {
+            'line-color': 'limegreen',
+            'line-width': 5,
+            'line-opacity': 0.9
+        }
+    });
+    
+    
+});
+
+const boatElement = document.createElement('div');
+boatElement.className = 'boat-marker';
+boatElement.style.backgroundImage = "url('/static/icons/boat.png')";
+boatElement.style.width = '80px';
+boatElement.style.height = '80px';
+boatElement.style.backgroundSize = 'contain';
+boatElement.style.backgroundRepeat = 'no-repeat';
+boatElement.style.pointerEvents = 'none';
+
+const boatMarker = new maplibregl.Marker({
+    element: boatElement,
+    anchor: 'center'
+}).setLngLat(previousPoint).addTo(map);
 
 if (!missionRunning) {
     livePosition();
 }
 
-function livePosition(updatePosition=false){
-    setInterval(async () => {
-        const response = await fetch('/api/position');
-        const data = await response.json();
-        
-        if (data.path && data.path.length > 0) {
-            const latest = data.path[data.path.length - 1];
-            if (latest.lon > 0 && latest.lat > 0){
-                if (previousPoint) {
-                    const angle = parseFloat(latest.degrees || 0.0);
-                
-                    boatMarker.setLatLng([latest.lat, latest.lon]);
-                    boatMarker.setRotationAngle(angle);
-                
-                    //map.panTo([latest.lat, latest.lon]);
-                
-                    updateDirectionLine(latest.lat, latest.lon, angle);
+document.getElementById('menu-toggle').addEventListener('click', () => {
+    let sidebar = document.getElementById('sidebar');
+    let menuToggle = document.getElementById('menu-toggle');
+
+    sidebar.classList.toggle('open');
+
+    // Sposta il pulsante assieme al menu
+    if (sidebar.classList.contains('open')) {
+        menuToggle.style.left = "250px"; // Stessa larghezza del menu
+    } else {
+        menuToggle.style.left = "20px";
+    }
+});
+map.on('rotate', () => {
+    if (previousPoint) {
+        updateRotatingDirectionLine(previousPoint.lat, previousPoint.lon);
+        updateRotatingDirectionLine(previousPoint.lat, previousPoint.lon);
+    }
+});
+
+async function updateLiveBoatData(data, updatePosition = false) {
+    if (data.path && data.path.length > 0) {
+        const latest = data.path[data.path.length - 1];
+        if (latest.lon > 0 && latest.lat > 0) {
+            const angle = parseFloat(latest.degrees || 0.0);
+            if (angle === 0 && lastValidAngle !== null) {
+                angle = lastValidAngle;
+            } else if (angle !== 0) {
+                lastValidAngle = angle;
+            }
+
+            boatMarker.setLngLat([latest.lon, latest.lat]);
+            rotateMap(angle);
+            updateDirectionLine(latest.lat, latest.lon);
+            updateRotatingDirectionLine(latest.lat, latest.lon, angle);
+
+            previousPoint = { lat: latest.lat, lon: latest.lon };
+            document.getElementById('current-lat').textContent = latest.lat + latest.lat_dir;
+            document.getElementById('current-lon').textContent = latest.lon + latest.lon_dir;
+            document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
+
+            map.getSource('realtime-path').setData({
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: data.path.map(p => [p.lon, p.lat])
+                        }
+                    }
+                ]
+            });
+
+            if (activeMissionLines.length > 0 && currentLineIndex < activeMissionLines.length) {
+                const currentLine = activeMissionLines[currentLineIndex];
+                const boatPoint = [latest.lon, latest.lat];
+            
+                const distance = distanceFromPointToLine(boatPoint, currentLine);
+                const meters = degreesToMeters(distance);
+                const distanceElement = document.getElementById('current-distance');
+                distanceElement.textContent = meters.toFixed(1);
+
+                // Colora se oltre soglia
+                if (meters > 15) {
+                    distanceElement.style.color = 'red';
+                } else {
+                    distanceElement.style.color = 'limegreen';
                 }
-                
-        
-                previousPoint = { lat: latest.lat, lon: latest.lon };
-                document.getElementById('current-lat').textContent = latest.lat + latest.lat_dir;
-                document.getElementById('current-lon').textContent = latest.lon + latest.lon_dir;
-                document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
-                
-                if (updatePosition){
-                    await fetch('/api/update_position', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            latitude: latest.lat,
-                            longitude: latest.lon,
-                            depth: latest.depth,
-                            mission_id: selectedMissionId
-                        })
-                    });
+
+                // Cambia soglia se necessario (~10-15 metri in gradi ≈ 0.0001)
+                if (distance < 0.0001) {
+                    currentLineIndex++;
+                    saveLineAsSubMission(currentLineIndex - 1);
+                    console.log(`✅ Linea ${currentLineIndex} completata`);
+            
+                    if (currentLineIndex < activeMissionLines.length) {
+                        highlightActiveLine(currentLineIndex);
+                    } else {
+                        console.log("🎉 Missione completata!");
+                        map.getSource('active-line').setData({
+                            type: 'FeatureCollection',
+                            features: []
+                        });
+                    }
                 }
             }
+            
+            
+        
+            if (updatePosition) {
+                await fetch('/api/update_position', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        latitude: latest.lat,
+                        longitude: latest.lon,
+                        depth: latest.depth,
+                        mission_id: selectedMissionId
+                    })
+                });
+            }
         }
+    }
+}
+
+
+function livePosition(updatePosition = false) {
+    setInterval(async () => {
+        updateDirectionLine(previousPoint.lat, previousPoint.lon);
+        updateRotatingDirectionLine(previousPoint.lat, previousPoint.lon);
+        const response = await fetch('/api/position');
+        const data = await response.json();
+        await updateLiveBoatData(data, updatePosition);
     }, 1000);
 }
+
 
 document.getElementById('start-mission').addEventListener('click', async () => {
     const button = document.getElementById('start-mission');
@@ -105,13 +283,34 @@ document.getElementById('start-mission').addEventListener('click', async () => {
             alert("⚠️ Nessuna missione selezionata! Crea o carica una missione prima di iniziare.");
             return;
         }
-        highlightButton('start-mission')
+        activeMissionLines = [...drawnLines];
+        currentLineIndex = 0;
+        highlightActiveLine(currentLineIndex);
+        highlightButton('start-mission');
+        document.getElementById('live-mission-controls').style.display = 'block';
+        document.getElementById('mission-status').style.display = 'block';
+
+
+
         const historyResponse = await fetch(`/api/get_mission_path/${selectedMissionId}`);
         const historyData = await historyResponse.json();
 
         if (historyData.path && historyData.path.length > 0) {
-            realTimePath.setLatLngs(historyData.path.map(p => [p.lat, p.lon]));
-            map.setView(historyData.path[historyData.path.length - 1], 12);
+            map.getSource('realtime-path').setData({
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: historyData.path.map(p => [p.lon, p.lat])
+                        }
+                    }
+                ]
+            });
+
+            const last = historyData.path[historyData.path.length - 1];
+            map.setCenter([last.lon, last.lat]);
         }
 
         if (trackingInterval) clearInterval(trackingInterval);
@@ -119,38 +318,7 @@ document.getElementById('start-mission').addEventListener('click', async () => {
         trackingInterval = setInterval(async () => {
             const response = await fetch('/api/position');
             const data = await response.json();
-            
-            if (data.path && data.path.length > 0) {
-                const latest = data.path[data.path.length - 1];
-                if (latest.lon > 0 && latest.lat > 0){
-                    if (previousPoint) {
-                        const angle = parseFloat(latest.degrees || 0.0);
-                    
-                        boatMarker.setLatLng([latest.lat, latest.lon]);
-                        boatMarker.setRotationAngle(angle);
-                    
-                        map.panTo([latest.lat, latest.lon]);
-                    
-                        updateDirectionLine(latest.lat, latest.lon, angle);
-                    }                    
-            
-                    previousPoint = { lat: latest.lat, lon: latest.lon };
-                    document.getElementById('current-lat').textContent = latest.lat + latest.lat_dir;
-                    document.getElementById('current-lon').textContent = latest.lon + latest.lon_dir;
-                    document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
-    
-                    await fetch('/api/update_position', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            latitude: latest.lat,
-                            longitude: latest.lon,
-                            depth: latest.depth,
-                            mission_id: selectedMissionId
-                        })
-                    });
-                }
-            }
+            await updateLiveBoatData(data, true);
         }, 1000);
 
         missionRunning = true;
@@ -160,11 +328,60 @@ document.getElementById('start-mission').addEventListener('click', async () => {
             clearInterval(trackingInterval);
             trackingInterval = null;
         }
+        // Reset linea evidenziata (verde)
+        const activeSource = map.getSource('active-line');
+        if (activeSource) {
+            activeSource.setData({
+                type: 'FeatureCollection',
+                features: []
+            });
+        }
+        document.getElementById('live-mission-controls').style.display = 'none';
+        document.getElementById('mission-status').style.display = 'none';
+        document.getElementById('current-distance').style.color = '#fff';
+
         missionRunning = false;
         button.textContent = "Start Mission";
         resetButtons();
     }
 });
+
+function degreesToMeters(d) {
+    return d * 111320;
+}
+
+function distanceFromPointToLine(point, line) {
+    const [x, y] = point;
+    const [[x1, y1], [x2, y2]] = line;
+
+    const A = x - x1;
+    const B = y - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+
+    const dot = A * C + B * D;
+    const len_sq = C * C + D * D;
+    let param = -1;
+    if (len_sq !== 0) param = dot / len_sq;
+
+    let xx, yy;
+
+    if (param < 0) {
+        xx = x1;
+        yy = y1;
+    } else if (param > 1) {
+        xx = x2;
+        yy = y2;
+    } else {
+        xx = x1 + param * C;
+        yy = y1 + param * D;
+    }
+
+    const dx = x - xx;
+    const dy = y - yy;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
 
 document.getElementById("deleteMissionBtn").addEventListener("click", function() {
     const missionName = prompt("Enter the mission name to delete:");
@@ -188,19 +405,287 @@ document.getElementById('plan-mission').addEventListener('click', () => {
     }
 });
 
-document.getElementById('add-line').addEventListener('click', () => {
-    removingMode = false;
-    map.off('click', removeLine);
+function rotateMap(bearingDegrees) {
+    map.rotateTo(bearingDegrees, { duration: 500 });
+    boatElement.style.transform = `rotate(${bearingDegrees}deg)`;
+}
 
-    if (currentLine) {
-        drawnLines.push(currentLine);
-        currentLine = null;
+function updateRotatingDirectionLine(lat, lon, bearing = null) {
+    const length = 0.2; // distanza (in gradi) da usare per la linea (puoi regolarla)
+    const usedBearing = (bearing !== null) ? bearing : map.getBearing();
+    // Convert bearing in radianti e calcola il secondo punto
+    const angleRad = (usedBearing * Math.PI) / 180;
+    const destLat = lat + length * Math.cos(angleRad);
+    const destLon = lon + length * Math.sin(angleRad);
+
+    const geojson = {
+        type: 'FeatureCollection',
+        features: [
+            {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [
+                        [lon, lat],
+                        [destLon, destLat]
+                    ]
+                }
+            }
+        ]
+    };
+
+    const source = map.getSource('direction-line-rotating');
+    if (source) source.setData(geojson);
+}
+
+
+function updateDirectionLine(lat, lon) {
+    if (!map || !map.isStyleLoaded()) {
+        return;
     }
 
-    currentLine = L.polyline([], { color: 'orange' }).addTo(map);
+    const bounds = map.getBounds();
+    const north = bounds.getNorth(); // Latitudine del bordo superiore
+
+    const geojson = {
+        type: 'FeatureCollection',
+        features: [
+            {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [
+                        [lon, lat],
+                        [lon, north]
+                    ]
+                }
+            }
+        ]
+    };
+    const source = map.getSource('direction-line');
+    if (source) source.setData(geojson);
+}
+
+function highlightButton(buttonId) {
+    let buttons = document.querySelectorAll(".button");
+
+    buttons.forEach(button => {
+
+        if (button.id === buttonId || button.id === 'complete-line') {
+            button.style.backgroundColor = "red"; 
+        } else {
+            button.disabled = true;
+        }
+    });
+}
+
+function resetButtons() {
+    let buttons = document.querySelectorAll(".button");
+
+    buttons.forEach(button => {
+        button.style.backgroundColor = ""; 
+        button.disabled = false;
+    });
+}
+
+document.getElementById('recenter-map').addEventListener('click', () => {
+    if (previousPoint) {
+        map.easeTo({
+            center: [previousPoint.lon, previousPoint.lat],
+            bearing: map.getBearing(), // conserva la rotazione attuale
+            duration: 1000
+        });
+    }
+});
+
+document.getElementById('add-line').addEventListener('click', () => {
+    drawingMode = true;
+    currentLineCoords = [];
     pointsCount = 0;
+
+    map.getCanvas().style.cursor = 'crosshair';
     map.on('click', addPointToSegment);
 });
+
+
+function addPointToSegment(e) {
+    const coord = [e.lngLat.lng, e.lngLat.lat];
+    currentLineCoords.push(coord);
+    pointsCount++;
+
+    // Aggiorna la linea corrente
+    const geojson = {
+        type: "FeatureCollection",
+        features: [
+            {
+                type: "Feature",
+                geometry: {
+                    type: "LineString",
+                    coordinates: currentLineCoords
+                }
+            }
+        ]
+    };
+
+    const source = map.getSource('current-line');
+    if (source) source.setData(geojson);
+
+    // Se abbiamo due punti, salviamo e chiudiamo il disegno
+    if (pointsCount === 2) {
+        //console.log("Linea aggiornata:", geojson);
+
+        finalizeCurrentLine();
+    }
+}
+function finalizeCurrentLine() {
+    map.off('click', addPointToSegment);
+    map.getCanvas().style.cursor = '';
+    drawingMode = false;
+
+    if (currentLineCoords.length === 2) {
+        drawnLines.push([...currentLineCoords]);
+
+        // Recupera la source mission-lines e aggiorna
+        const missionSource = map.getSource('mission-lines');
+        if (missionSource) {
+            const existing = missionSource._data || {
+                type: 'FeatureCollection',
+                features: []
+            };
+
+            const newFeature = {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: currentLineCoords
+                }
+            };
+
+            const updated = {
+                type: 'FeatureCollection',
+                features: [...existing.features, newFeature]
+            };
+
+            missionSource.setData(updated);
+        }
+    }
+
+    // Reset della linea attiva
+    currentLineCoords = [];
+    pointsCount = 0;
+    map.getSource('current-line').setData({
+        type: "FeatureCollection",
+        features: []
+    });
+}
+
+function updateMissionLinesSource() {
+    const features = drawnLines.map(coords => ({
+        type: 'Feature',
+        geometry: {
+            type: 'LineString',
+            coordinates: coords
+        }
+    }));
+
+    const source = map.getSource('mission-lines');
+    if (source) {
+        source.setData({
+            type: 'FeatureCollection',
+            features: features
+        });
+    }
+}
+
+
+let removingMode = false;
+
+function enableRemovingMode() {
+    removingMode = true;
+    map.getCanvas().style.cursor = 'pointer';
+    map.on('click', removeLineOnClick);
+}
+
+function disableRemovingMode() {
+    removingMode = false;
+    map.getCanvas().style.cursor = '';
+    map.off('click', removeLineOnClick);
+}
+
+function removeLineOnClick(e) {
+    const clickPoint = [e.lngLat.lng, e.lngLat.lat];
+
+    // Soglia di distanza in gradi (~10m): puoi regolarla
+    const tolerance = 0.0001;
+
+    let lineToRemove = -1;
+
+    drawnLines.forEach((line, idx) => {
+        for (let i = 0; i < line.length - 1; i++) {
+            const segment = [line[i], line[i + 1]];
+            if (isPointNearSegment(clickPoint, segment, tolerance)) {
+                lineToRemove = idx;
+                break;
+            }
+        }
+    });
+
+    if (lineToRemove !== -1) {
+        drawnLines.splice(lineToRemove, 1);
+        updateMissionLinesSource();
+    }
+}
+
+function isPointNearSegment(p, seg, tol) {
+    const [x, y] = p;
+    const [[x1, y1], [x2, y2]] = seg;
+
+    // distanza punto-segmento (2D, in coordinate gradi)
+    const A = x - x1;
+    const B = y - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    const param = lenSq !== 0 ? dot / lenSq : -1;
+
+    let xx, yy;
+
+    if (param < 0) {
+        xx = x1;
+        yy = y1;
+    } else if (param > 1) {
+        xx = x2;
+        yy = y2;
+    } else {
+        xx = x1 + param * C;
+        yy = y1 + param * D;
+    }
+
+    const dx = x - xx;
+    const dy = y - yy;
+
+    return (dx * dx + dy * dy) < (tol * tol);
+}
+
+document.getElementById('edit-lines').addEventListener('click', () => {
+    editMode = !editMode;
+
+    if (editMode) {
+        enableRemovingMode();
+        document.getElementById('edit-lines').textContent = "Stop Editing";
+        document.getElementById('add-line').disabled = true;
+        document.getElementById('clear-line').disabled = true;
+    } else {
+        disableRemovingMode();
+        document.getElementById('edit-lines').textContent = "Edit Lines";
+        document.getElementById('add-line').disabled = false;
+        document.getElementById('clear-line').disabled = false;
+    }
+});
+
+
 
 
 document.getElementById('create-mission').addEventListener('click', async () => {
@@ -239,7 +724,7 @@ document.getElementById('confirm-save').addEventListener('click', async () => {
         name: name,
         user_id: parseInt(userId),
         boat_id: parseInt(boatId),
-        path: JSON.stringify(drawnLines.map(line => line.getLatLngs())) // Salviamo le coordinate delle linee
+        path: JSON.stringify(drawnLines)
     };
 
     const url = selectedMissionId 
@@ -268,6 +753,12 @@ document.getElementById('confirm-save').addEventListener('click', async () => {
     updateSaveButtonText(); 
 });
 
+function updateSaveButtonText() {
+    const saveButton = document.getElementById('save-mission');
+    saveButton.textContent = selectedMissionId ? "Update" : "Save";
+}
+
+// LOAD MISSION
 document.getElementById('load-mission').addEventListener('click', async () => {
     document.getElementById('load-popup').style.display = 'block';
 
@@ -289,14 +780,8 @@ document.getElementById('confirm-load').addEventListener('click', async () => {
     document.getElementById('mission-name').innerText = `Mission: ${mission.name}`;
 
     if (mission.path) {
-        drawnLines.forEach(line => map.removeLayer(line));
-        drawnLines = [];
-
-        const lines = JSON.parse(mission.path);
-        lines.forEach(lineCoords => {
-            let polyline = L.polyline(lineCoords, { color: 'blue', draggable: true }).addTo(map);
-            drawnLines.push(polyline);
-        });
+        drawnLines = JSON.parse(mission.path);
+        updateMissionLinesSource();
     }
 
     // Recupera il percorso storico della missione selezionata
@@ -304,8 +789,31 @@ document.getElementById('confirm-load').addEventListener('click', async () => {
     const historyData = await historyResponse.json();
 
     if (historyData.path && historyData.path.length > 0) {
-        realTimePath.setLatLngs(historyData.path.map(p => [p.lat, p.lon]));
-        map.setView(historyData.path[historyData.path.length - 1], 12);
+        const pathCoords = historyData.path.map(p => [p.lon, p.lat]);
+        const source = map.getSource('realtime-path');
+
+        if (source) {
+            source.setData({
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: pathCoords
+                        }
+                    }
+                ]
+            });
+        }
+
+        if (pathCoords.length > 0) {
+            map.easeTo({
+                center: pathCoords[pathCoords.length - 1],
+                zoom: 12
+            });
+        }
+
     }
 
     document.getElementById('load-popup').style.display = 'none';
@@ -319,7 +827,6 @@ document.getElementById('cancel-save').addEventListener('click', () => {
     document.getElementById('save-popup').style.display = 'none';
 });
 
-
 document.getElementById('export-mission').addEventListener('click', async () => {
     if (!selectedMissionId) {
         alert("⚠️ Nessuna missione selezionata! Crea o carica una missione prima di esportare.");
@@ -329,227 +836,80 @@ document.getElementById('export-mission').addEventListener('click', async () => 
     window.location.href = `/api/export_mission/${selectedMissionId}`;
 });
 
-let editMode = false;
-let vertexMarkers = [];
-
-document.getElementById('edit-lines').addEventListener('click', () => {
-
-    editMode = !editMode;
-    if (editMode) {
-        enableEditing();
-        document.getElementById('add-line').disabled = editMode;
-        document.getElementById('clear-line').disabled = editMode;
-        document.getElementById('edit-lines').textContent = "Stop Editing";
-    } else {
-        disableEditing();
-        document.getElementById('edit-lines').textContent = "Edit Lines";
-
-        document.getElementById('add-line').disabled = false;
-        document.getElementById('clear-line').disabled = false;
-    }
-});
-
-document.getElementById('clear-line').addEventListener('click', () => {
-    showClearConfirmation();
-});
-
-document.getElementById('menu-toggle').addEventListener('click', () => {
-    let sidebar = document.getElementById('sidebar');
-    let menuToggle = document.getElementById('menu-toggle');
-
-    sidebar.classList.toggle('open');
-
-    // Sposta il pulsante assieme al menu
-    if (sidebar.classList.contains('open')) {
-        menuToggle.style.left = "250px"; // Stessa larghezza del menu
-    } else {
-        menuToggle.style.left = "20px";
-    }
-});
-
-function showClearConfirmation() {
-    const confirmation = confirm("⚠️ Sei sicuro di voler eliminare tutte le linee? Questa operazione non può essere annullata.");
-    if (confirmation) {
-        clearAllLines();
-    }
-}
-
-function updateSaveButtonText() {
-    const saveButton = document.getElementById('save-mission');
-    saveButton.textContent = selectedMissionId ? "Update" : "Save";
-}
-
-function clearAllLines() {
-    drawnLines.forEach(line => map.removeLayer(line));
-    drawnLines = [];
-
-    vertexMarkers.forEach(marker => map.removeLayer(marker));
-    vertexMarkers = [];
-
-}
-
-
-function enableEditing() {
-    // Rimuove i vecchi marcatori dei vertici
-    vertexMarkers.forEach(marker => map.removeLayer(marker));
-    vertexMarkers = [];
-
-    drawnLines.forEach(line => {
-        const latLngs = line.getLatLngs();
-        latLngs.forEach((latlng, index) => {
-            let vertex = L.marker(latlng, {
-                draggable: true,
-                icon: L.divIcon({
-                    className: "vertex-marker",
-                    html: "⬤",
-                    iconSize: [12, 12],
-                    iconAnchor: [6, 6]
-                })
-            }).addTo(map);
-
-            // Quando si trascina il vertice, aggiorna la linea
-            vertex.on('drag', function (e) {
-                latLngs[index] = e.target.getLatLng();
-                line.setLatLngs(latLngs);
-            });
-
-            // Rimuove il vertice al doppio clic
-            vertex.on('dblclick', function () {
-                if (!editMode) return;
-                map.removeLayer(vertex);
-                latLngs.splice(index, 1);
-                line.setLatLngs(latLngs);
-            });
-
-            vertexMarkers.push(vertex);
-        });
-    });
-}
-
-function disableEditing() {
-    vertexMarkers.forEach(marker => map.removeLayer(marker));
-    vertexMarkers = [];
-}
-
 function setSelectedMission(missionId) {
     selectedMissionId = missionId;
     console.log(`Missione selezionata: ${selectedMissionId}`);
 }
 
-async function fetchMissionName() {
-    if (!selectedMissionId) return;
+function highlightActiveLine(index) {
+    if (activeMissionLines.length === 0 || index >= activeMissionLines.length) return;
 
-    try {
-        const response = await fetch(`/api/get_mission_name/${selectedMissionId}`);
-        const data = await response.json();
+    const current = activeMissionLines[index];
 
-        if (data.name) {
-            document.getElementById('mission-name').innerText = `Mission: ${data.name}`;
-        } else {
-            document.getElementById('mission-name').innerText = "Mission: Unknown";
-        }
-    } catch (error) {
-        console.error("Errore nel recupero del nome della missione:", error);
-    }
-}
-
-
-function addPointToSegment(e) {
-    if (!currentLine || removingMode) return; // Blocca l'aggiunta in modalità rimozione
-
-    const { lat, lng } = e.latlng;
-    let latLngs = currentLine.getLatLngs();
-
-    latLngs.push([lat, lng]);
-    currentLine.setLatLngs(latLngs);
-    pointsCount++;
-
-    if (pointsCount === 2) {
-        drawnLines.push(currentLine);
-        currentLine = null;
-        map.off('click', addPointToSegment);
-    }
-}
-
-function removeLine(e) {
-    let closestLine = null;
-    let minDistance = Infinity;
-
-    drawnLines.forEach(line => {
-        const latLngs = line.getLatLngs();
-        if (latLngs.length === 2) {
-            const distance = pointToSegmentDistance(e.latlng, latLngs[0], latLngs[1]);
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestLine = line;
+    const geojson = {
+        type: 'FeatureCollection',
+        features: [
+            {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: current
+                }
             }
-        }
-    });
+        ]
+    };
 
-    if (closestLine && minDistance < 20) {
-        map.removeLayer(closestLine);
-        drawnLines = drawnLines.filter(line => line !== closestLine);
+    const source = map.getSource('active-line');
+    if (source) {
+        source.setData(geojson);
     }
 }
 
-function pointToSegmentDistance(point, segmentStart, segmentEnd) {
-    const A = point.lat - segmentStart.lat;
-    const B = point.lng - segmentStart.lng;
-    const C = segmentEnd.lat - segmentStart.lat;
-    const D = segmentEnd.lng - segmentStart.lng;
+document.getElementById('complete-line').addEventListener('click', () => {
+    forceCompleteCurrentLine();
+});
 
-    const dot = A * C + B * D;
-    const lenSq = C * C + D * D;
-    const param = lenSq !== 0 ? dot / lenSq : -1;
+function forceCompleteCurrentLine() {
+    if (activeMissionLines.length === 0 || currentLineIndex >= activeMissionLines.length) return;
 
-    let closest;
-    if (param < 0) {
-        closest = segmentStart;
-    } else if (param > 1) {
-        closest = segmentEnd;
+    console.log(`⚠️ Forzato completamento linea ${currentLineIndex + 1}`);
+    currentLineIndex++;
+
+    if (currentLineIndex < activeMissionLines.length) {
+        highlightActiveLine(currentLineIndex);
     } else {
-        closest = {
-            lat: segmentStart.lat + param * C,
-            lng: segmentStart.lng + param * D
-        };
+        map.getSource('active-line').setData({
+            type: 'FeatureCollection',
+            features: []
+        });
+        console.log("🎉 Missione completata (forzata)!");
     }
 
-    return map.distance(point, closest);
+    saveLineAsSubMission(currentLineIndex - 1); // Salva la linea appena completata
 }
 
-function highlightButton(buttonId) {
-    let buttons = document.querySelectorAll(".button");
+async function saveLineAsSubMission(index) {
+    if (!selectedMissionId || !activeMissionLines[index]) return;
 
-    buttons.forEach(button => {
-        if (button.id === buttonId) {
-            button.style.backgroundColor = "red"; 
-        } else {
-            button.disabled = true;
-        }
+    const missionName = document.getElementById('mission-name').innerText.replace('Mission: ', '');
+    const subMissionName = `${missionName}_linea_${index + 1}`;
+
+    const userId = document.getElementById('mission-user')?.value;
+    const boatId = document.getElementById('mission-boat')?.value;
+
+    const missionData = {
+        name: subMissionName,
+        user_id: parseInt(userId || 0),
+        boat_id: parseInt(boatId || 0),
+        path: JSON.stringify([activeMissionLines[index]])
+    };
+
+    const response = await fetch('/api/save-mission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(missionData)
     });
-}
-function resetButtons() {
-    let buttons = document.querySelectorAll(".button");
 
-    buttons.forEach(button => {
-        button.style.backgroundColor = ""; 
-        button.disabled = false;
-    });
-}
-function updateDirectionLine(lat, lon, angle) {
-    const bounds = map.getBounds();
-    const northEast = bounds.getNorthEast();
-    const southWest = bounds.getSouthWest();
-
-    const maxDistance = Math.max(
-        Math.abs(northEast.lat - southWest.lat),
-        Math.abs(northEast.lng - southWest.lng)
-    );
-
-    const lineLength = maxDistance * 1.2; // Estensione oltre lo schermo
-
-    const directionEndLat = lat + (lineLength * Math.cos(angle * Math.PI / 180));
-    const directionEndLon = lon + (lineLength * Math.sin(angle * Math.PI / 180));
-
-    directionLine.setLatLngs([[lat, lon], [directionEndLat, directionEndLon]]);
+    const result = await response.json();
+    console.log(`✅ Salvata sotto-missione: ${subMissionName}`, result);
 }
