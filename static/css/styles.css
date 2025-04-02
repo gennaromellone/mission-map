@@ -11,7 +11,7 @@ body {
     left: 0;
     width: 100%;
     height: 100vh; /* Occupa tutta l'altezza della finestra */
-    z-index: 0; /* Assicura che la mappa sia dietro il menu */
+    z-index: 1; /* Assicura che la mappa sia dietro il menu */
 }
 #title {
     text-align: center;
@@ -43,7 +43,7 @@ body {
     background-color: rgba(0, 0, 0, 0.6); /* Sfondo leggermente più scuro per maggiore leggibilità */
     padding: 8px 12px;
     border-radius: 5px;
-    font-size: 32px;
+    font-size: 24px;
     color: #fff;
     box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
     z-index: 9999; /* Massima priorità per stare sopra tutto */
@@ -113,11 +113,12 @@ body {
 
 #sidebar.open + #menu-toggle {
     left: 250px;
+    pointer-events: auto;
 }
 
 /* Menu laterale */
 #sidebar {
-    position: fixed;
+    position: absolute;
     top: 0;
     left: -270px; /* Assicura che sia fuori dallo schermo */
     width: 200px;
@@ -126,7 +127,8 @@ body {
     box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.3);
     padding: 20px;
     transition: left 0.3s ease-in-out;
-    z-index: 1000;
+    z-index: 10;
+    pointer-events: auto;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -171,3 +173,37 @@ body {
     width: 85%; /* Rende i pulsanti larghi quanto il container */
     text-align: center;
 }
+
+#mission-name {
+    position: fixed;
+    top: 5px;
+    right: 50%;
+    background: rgba(2, 48, 71, 0.9);
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 20px;
+    color: #fff;
+    z-index: 1001;
+    box-shadow: 0px 2px 4px rgba(0,0,0,0.2);
+}
+
+#recenter-map {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    background: white;
+    border: none;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    padding: 10px;
+    cursor: pointer;
+    z-index: 2000;
+    font-size: 18px;
+    display: block; /* Assicurati che non sia "none" */
+}
+
+#mission-status {
+    font-size: 20px;
+    margin-bottom: 5px;
+}
+
