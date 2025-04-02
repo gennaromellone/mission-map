@@ -322,8 +322,8 @@ def populate():
 
 @app.route('/api/tiles/<int:z>/<int:x>/<int:y>.webp')
 def get_tile(z, x, y):
-    response = send_from_directory(TILE_FOLDER, f"{z}/{x}/{y}.webp")
     
+    response = send_from_directory(TILE_FOLDER, f"{z}/{x}/{y}.webp")
     return response
 
 
