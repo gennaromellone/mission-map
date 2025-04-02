@@ -5,14 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mission Planner</title>
     <link rel="stylesheet" href="/static/css/styles.css">
-    <link rel="stylesheet" href="/static/css/leaflet.css">
+    <link href="/static/css/maplibre-gl.css" rel="stylesheet" />
 </head>
 <body>
-    <div id="mission-name">Mission: None</div>
-
-    <div id="menu-toggle">☰</div>
-
-    <!-- Menu laterale -->
+    <!-- Menu laterale fuori dal div mappa -->
     <div id="sidebar">
         <div>Mission-Planner App</div>
         <button class="button" id="plan-mission">Plan Mission</button>
@@ -20,26 +16,42 @@
             <button class="button" id="add-line">Add Line</button>
             <button class="button" id="edit-lines">Edit Lines</button>
             <button class="button" id="clear-line">Clear</button>
+
         </div>
         <button class="button" id="create-mission">Create Mission</button>
         <button class="button" id="deleteMissionBtn">Delete Mission</button>
 
         <button class="button" style="margin-top: 25px;" id="start-mission">Start Mission</button>
+        <div id="live-mission-controls" style="display: none;">
+            <button class="button" id="complete-line">Complete Line</button>
+        </div>
+        
 
         <button class="button" style="margin-top: 25px;" id="save-mission">Save</button>
         <button class="button" id="load-mission">Load</button>
         <button class="button" id="export-mission">Export</button>
         <button class="button" onclick="location.href = '/configuration'" style="margin-top: 25px;" id="setting-mission">Settings</button>
-        
     </div>
 
+    <div id="menu-toggle">☰</div>
+
+    <div id="mission-name">Mission: None</div>
+
+    <!-- Mappa -->
     <div id="map">
         <div id="coordinates">
-            Lat: <span id="current-lat">--</span>, Lon: <span id="current-lon">--</span>, Depth: <span id="current-depth">--</span>
+            <div id="mission-status" style="display: none;">
+                Distanza dalla linea: <span id="current-distance">--</span> m
+            </div>
+            Lat: <span id="current-lat">--</span>,
+            Lon: <span id="current-lon">--</span>,
+            Depth: <span id="current-depth">--</span>
         </div>
+               
     </div>
+    <button id="recenter-map" title="Torna alla barca">📍</button>
 
-    <!-- Popup per il salvataggio -->
+    <!-- Popup per salvataggio -->
     <div id="save-popup" class="popup" style="display: none;">
         <h3>Save Mission</h3>
         <label for="mission-name">Mission Name:</label>
@@ -55,7 +67,7 @@
         <button id="cancel-save">Cancel</button>
     </div>
 
-    <!-- Popup per il caricamento delle missioni -->
+    <!-- Popup per caricamento -->
     <div id="load-popup" class="popup" style="display: none;">
         <h3>Load Mission</h3>
         <label for="mission-select">Select a Mission:</label>
@@ -65,9 +77,7 @@
         <button id="cancel-load">Cancel</button>
     </div>
 
-
-    <script src="/static/leaflet/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="/static/leaflet/leaflet.rotatedMarker.js"></script>
+    <script src="/static/js/maplibre-bl.js"></script>
     <script src="/static/js/scripts.js"></script>
 </body>
 </html>
