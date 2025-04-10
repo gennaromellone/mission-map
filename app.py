@@ -176,7 +176,6 @@ def get_position():
     for device_name, device in devices.items():
         data = device.get_latest_data()
         if "msg" in data:
-            print(data)
             if device_name.lower().startswith("gps"):
                 statusGPS = 'err'
                 if 'error' not in data['msg']:
@@ -203,7 +202,6 @@ def get_position():
                         last_valid_position['depth'] = depth
                         statusDepth = 'ok'
                 last_valid_position['statusDepth'] = statusDepth
-
     return jsonify({"path": [last_valid_position]})
 
 @app.route('/api/save-mission', methods=['POST'])
@@ -319,6 +317,12 @@ def populate():
 
     return jsonify({"message": "User and boat added!"})
 
+
+@app.route("/api/gps_status")
+def gps_status():
+    # Logica per controllare se il GPS USB è connesso (mock o reale)
+    has_gps = check_usb_gps()  # <-- funzione da implementare
+    return jsonify({"usb_gps": has_gps})
 
 @app.route('/api/tiles/<int:z>/<int:x>/<int:y>.webp')
 def get_tile(z, x, y):

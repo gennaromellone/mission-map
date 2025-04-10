@@ -255,34 +255,33 @@ async function updateLiveBoatData(data, updatePosition = false) {
             if (activeMissionLines.length > 0 && currentLineIndex < activeMissionLines.length) {
                 const currentLine = activeMissionLines[currentLineIndex];
                 const boatPoint = [latest.lon, latest.lat];
-            
-                const distance = distanceFromPointToLine(boatPoint, currentLine);
-                const meters = degreesToMeters(distance);
                 const distanceElement = document.getElementById('current-distance');
-                distanceElement.textContent = meters.toFixed(1);
-
-                // Colora se oltre soglia
-                if (meters > 15) {
-                    distanceElement.style.color = 'red';
-                } else {
-                    distanceElement.style.color = 'limegreen';
-                }
-
-                // Cambia soglia se necessario (~10-15 metri in gradi ≈ 0.0001)
-                if (distance < 0.0001) {
-                    currentLineIndex++;
-                    saveLineAsSubMission(currentLineIndex - 1);
-                    console.log(`✅ Linea ${currentLineIndex} completata`);
             
-                    if (currentLineIndex < activeMissionLines.length) {
-                        highlightActiveLine(currentLineIndex);
-                    } else {
-                        console.log("🎉 Missione completata!");
-                        map.getSource('active-line').setData({
-                            type: 'FeatureCollection',
-                            features: []
-                        });
+                if (isBoatNearLine(boatPoint, currentLine)) {
+                    const distance = distanceFromPointToLine(boatPoint, currentLine);
+                    const meters = degreesToMeters(distance);
+            
+                    distanceElement.textContent = meters.toFixed(1);
+                    distanceElement.style.color = meters > 15 ? 'red' : 'limegreen';
+            
+                    if (distance < 0.0001) {
+                        currentLineIndex++;
+                        saveLineAsSubMission(currentLineIndex - 1);
+                        console.log(`✅ Linea ${currentLineIndex} completata`);
+            
+                        if (currentLineIndex < activeMissionLines.length) {
+                            highlightActiveLine(currentLineIndex);
+                        } else {
+                            console.log("🎉 Missione completata!");
+                            map.getSource('active-line').setData({
+                                type: 'FeatureCollection',
+                                features: []
+                            });
+                        }
                     }
+                } else {
+                    distanceElement.textContent = ">100";
+                    distanceElement.style.color = 'red';
                 }
             }
             
@@ -938,3 +937,17 @@ document.getElementById('confirm-manual-line').addEventListener('click', () => {
     // Chiudi il popup
     document.getElementById('manual-line-popup').style.display = 'none';
 });
+
+function isBoatNearLine(boatPoint, line, thresholdDeg = 0.001) {
+    const bbox = [
+        Math.min(line[0][0], line[1][0]),
+        Math.min(line[0][1], line[1][1]),
+        Math.max(line[0][0], line[1][0]),
+        Math.max(line[0][1], line[1][1])
+    ];
+
+    return !(boatPoint[0] < bbox[0] - thresholdDeg || 
+             boatPoint[0] > bbox[2] + thresholdDeg ||
+             boatPoint[1] < bbox[1] - thresholdDeg || 
+             boatPoint[1] > bbox[3] + thresholdDeg);
+}
