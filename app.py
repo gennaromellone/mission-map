@@ -26,7 +26,7 @@ last_position = {
     'lon':  14.284214343900299,
     'depth': 0.0
     }
-TILE_FOLDER = "/home/argo/tiles"
+TILE_FOLDER = "/home/navigation/tiles"
 
 # Database models
 class User(db.Model):

@@ -177,6 +177,39 @@ map.on('rotate', () => {
     }
 });
 
+async function displayHistoricalPath(missionId) {
+    const response = await fetch(`/api/get_mission_path/${missionId}`);
+    const data = await response.json();
+
+    if (data.path && data.path.length > 0) {
+        const pathCoords = data.path.map(p => [p.lon, p.lat]);
+        const source = map.getSource('realtime-path');
+
+        if (source) {
+            source.setData({
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: pathCoords
+                        }
+                    }
+                ]
+            });
+        }
+
+        // Centro la mappa sull’ultimo punto
+        const last = pathCoords[pathCoords.length - 1];
+        map.easeTo({
+            center: last,
+            zoom: 14
+        });
+    }
+}
+
+
 async function updateLiveBoatData(data, updatePosition = false) {
     if (data.path && data.path.length > 0) {
         const latest = data.path[data.path.length - 1];
@@ -192,6 +225,14 @@ async function updateLiveBoatData(data, updatePosition = false) {
             rotateMap(angle);
             updateDirectionLine(latest.lat, latest.lon);
             updateRotatingDirectionLine(latest.lat, latest.lon, angle);
+
+            if (updatePosition) {
+                map.easeTo({
+                    center: [latest.lon, latest.lat],
+                    bearing: map.getBearing(),
+                    duration: 500
+                });
+            }
 
             previousPoint = { lat: latest.lat, lon: latest.lon };
             document.getElementById('current-lat').textContent = latest.lat + latest.lat_dir;
@@ -290,28 +331,7 @@ document.getElementById('start-mission').addEventListener('click', async () => {
         document.getElementById('live-mission-controls').style.display = 'block';
         document.getElementById('mission-status').style.display = 'block';
 
-
-
-        const historyResponse = await fetch(`/api/get_mission_path/${selectedMissionId}`);
-        const historyData = await historyResponse.json();
-
-        if (historyData.path && historyData.path.length > 0) {
-            map.getSource('realtime-path').setData({
-                type: 'FeatureCollection',
-                features: [
-                    {
-                        type: 'Feature',
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: historyData.path.map(p => [p.lon, p.lat])
-                        }
-                    }
-                ]
-            });
-
-            const last = historyData.path[historyData.path.length - 1];
-            map.setCenter([last.lon, last.lat]);
-        }
+        await displayHistoricalPath(selectedMissionId);
 
         if (trackingInterval) clearInterval(trackingInterval);
 
@@ -784,37 +804,7 @@ document.getElementById('confirm-load').addEventListener('click', async () => {
         updateMissionLinesSource();
     }
 
-    // Recupera il percorso storico della missione selezionata
-    const historyResponse = await fetch(`/api/get_mission_path/${selectedMissionId}`);
-    const historyData = await historyResponse.json();
-
-    if (historyData.path && historyData.path.length > 0) {
-        const pathCoords = historyData.path.map(p => [p.lon, p.lat]);
-        const source = map.getSource('realtime-path');
-
-        if (source) {
-            source.setData({
-                type: 'FeatureCollection',
-                features: [
-                    {
-                        type: 'Feature',
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: pathCoords
-                        }
-                    }
-                ]
-            });
-        }
-
-        if (pathCoords.length > 0) {
-            map.easeTo({
-                center: pathCoords[pathCoords.length - 1],
-                zoom: 12
-            });
-        }
-
-    }
+    await displayHistoricalPath(selectedMissionId);
 
     document.getElementById('load-popup').style.display = 'none';
 });
@@ -913,3 +903,38 @@ async function saveLineAsSubMission(index) {
     const result = await response.json();
     console.log(`✅ Salvata sotto-missione: ${subMissionName}`, result);
 }
+
+// Mostra popup quando clicchi su "Add Manual Line"
+document.getElementById('add-manual-line').addEventListener('click', () => {
+    document.getElementById('manual-line-popup').style.display = 'block';
+});
+
+// Chiudi il popup
+document.getElementById('cancel-manual-line').addEventListener('click', () => {
+    document.getElementById('manual-line-popup').style.display = 'none';
+});
+
+// Conferma e aggiungi la linea alla mappa
+document.getElementById('confirm-manual-line').addEventListener('click', () => {
+    const lat1 = parseFloat(document.getElementById('manual-lat1').value);
+    const lon1 = parseFloat(document.getElementById('manual-lon1').value);
+    const lat2 = parseFloat(document.getElementById('manual-lat2').value);
+    const lon2 = parseFloat(document.getElementById('manual-lon2').value);
+
+    if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) {
+        alert("⚠️ Inserisci tutte le coordinate valide.");
+        return;
+    }
+
+    const newLine = [
+        [lon1, lat1],
+        [lon2, lat2]
+    ];
+
+    // Aggiungila alle linee disegnate
+    drawnLines.push(newLine);
+    updateMissionLinesSource();
+
+    // Chiudi il popup
+    document.getElementById('manual-line-popup').style.display = 'none';
+});
