@@ -444,6 +444,13 @@ document.getElementById('start-mission').addEventListener('click', async () => {
 
         missionRunning = true;
         button.textContent = "Stop Mission";
+        const sidebar = document.getElementById('sidebar');
+        const menuToggle = document.getElementById('menu-toggle');
+
+        if (sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+            menuToggle.style.left = "20px";
+        }
     } else {
         if (trackingInterval) {
             clearInterval(trackingInterval);
