@@ -210,7 +210,42 @@ body {
 }
 
 #mission-status {
-    font-size: 20px;
-    margin-bottom: 5px;
+    font-size: 18px;
+    margin-bottom: 8px;
+    line-height: 1.4;
+    color: #fff;
+}
+#line-progress {
+    display: block;
+    font-weight: bold;
+    color: #ffb703; /* giallo ambra */
+    margin-top: 5px;
 }
 
+#next-line {
+    background-color: #fb8500; /* arancio vivo */
+}
+
+#next-line:hover {
+    background-color: #ffb703;
+}
+
+@media (max-width: 1024px) {
+    #sidebar {
+        width: 160px;
+    }
+
+    #sidebar.open + #menu-toggle {
+        left: 160px;
+    }
+
+    #sidebar .button {
+        font-size: 14px;
+        padding: 10px;
+    }
+
+    #mission-controls .button {
+        font-size: 11px;
+        width: 100%;
+    }
+}

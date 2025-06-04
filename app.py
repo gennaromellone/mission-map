@@ -27,6 +27,7 @@ last_position = {
     'depth': 0.0
     }
 TILE_FOLDER = "/home/navigation/tiles"
+TILE_STREET_FOLDER = "/home/navigation/tiles-street"
 
 # Database models
 class User(db.Model):
@@ -330,6 +331,11 @@ def get_tile(z, x, y):
     response = send_from_directory(TILE_FOLDER, f"{z}/{x}/{y}.webp")
     return response
 
+@app.route('/api/vector-tiles/<int:z>/<int:x>/<int:y>.pbf')
+def get_vector_tile(z, x, y):
+    response = send_from_directory(TILE_STREET_FOLDER, f"{z}/{x}/{y}.pbf")
+    response.headers['Content-Encoding'] = 'gzip'  # tiles precompressi
+    return response
 
 if __name__ == '__main__':
     with app.app_context():

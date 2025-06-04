@@ -17,11 +17,17 @@ const map = new maplibregl.Map({
     style: {
         version: 8,
         sources: {
-            "offline-tiles": {
-                type: "raster",
-                tiles: ["/api/tiles/{z}/{x}/{y}.webp"],
-                tileSize: 256,
-                attribution: "Tiles &copy; Esri"
+            //"offline-tiles": {
+            //    type: "raster",
+            //    tiles: ["/api/tiles/{z}/{x}/{y}.webp"],
+            //    tileSize: 256,
+            //    attribution: "Tiles &copy; Esri"
+            //},
+            "openmaptiles": {
+                type: "vector",
+                tiles: ["http://10.42.0.1/api/vector-tiles/{z}/{x}/{y}.pbf"],
+                minzoom: 0,
+                maxzoom: 14
             },
             "missions": {
                 type: "geojson",
@@ -48,13 +54,61 @@ const map = new maplibregl.Map({
             },
         },
         layers: [
-            { id: "offline-layer", type: "raster", source: "offline-tiles" },
+            //{ id: "offline-layer", type: "raster", source: "offline-tiles" },
+            {
+                id: "background",
+                type: "background",
+                paint: { "background-color": "#ddeeff" }
+            },
+            {
+                id: "water",
+                type: "fill",
+                source: "openmaptiles",
+                "source-layer": "water",
+                paint: { "fill-color": "#a0c8f0", 
+                    "fill-opacity": 0.6
+                }
+            },
+            {
+                id: "roads",
+                type: "line",
+                source: "openmaptiles",
+                "source-layer": "transportation",
+                paint: {
+                    "line-color": "#888888",     // grigio neutro
+                    "line-width": 1.5
+                }
+            },
+            {
+                id: "ferry-routes",
+                type: "line",
+                source: "openmaptiles",
+                "source-layer": "transportation",
+                filter: ["==", "class", "ferry"],
+                paint: {
+                    "line-color": "#1a75ff",
+                    "line-width": 2,
+                    "line-dasharray": [2, 2]
+            }
+            },
+
+            {
+                id: "buildings",
+                type: "fill",
+                source: "openmaptiles",
+                "source-layer": "building",
+                paint: {
+                    "fill-color": "#bbbbbb",
+                    "fill-opacity": 0.6
+                }
+            },
+            
             {
                 id: "current-line-layer",
                 type: "line",
                 source: "current-line",
                 paint: {
-                    "line-color": "orange",
+                    "line-color": "pink",
                     "line-width": 3
                 }
             },
@@ -91,7 +145,7 @@ const map = new maplibregl.Map({
     minZoom: 10,
     maxZoom: 20,
     center: previousPoint,
-    zoom: 15,
+    zoom: 14,
     bearing: 0
 });
 
@@ -112,7 +166,7 @@ map.on('load', () => {
         type: 'line',
         source: 'mission-lines',
         paint: {
-            'line-color': 'orange',
+            'line-color': 'blue',
             'line-width': 3
         }
     });
@@ -122,6 +176,13 @@ map.on('load', () => {
         data: {
             type: 'FeatureCollection',
             features: []
+        }
+    });
+
+    map.loadImage('/static/icons/arrow.png', (error, image) => {
+        if (error) throw error;
+        if (!map.hasImage('arrow-icon')) {
+            map.addImage('arrow-icon', image);
         }
     });
     
@@ -135,7 +196,19 @@ map.on('load', () => {
             'line-opacity': 0.9
         }
     });
-    
+    map.addLayer({
+        id: 'active-line-arrow',
+        type: 'symbol',
+        source: 'active-line',
+        layout: {
+            'symbol-placement': 'line',
+            'symbol-spacing': 60,
+            'icon-image': 'arrow-icon',
+            'icon-size': 0.6,
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true
+        }
+    });
     
 });
 
@@ -256,36 +329,18 @@ async function updateLiveBoatData(data, updatePosition = false) {
                 const currentLine = activeMissionLines[currentLineIndex];
                 const boatPoint = [latest.lon, latest.lat];
                 const distanceElement = document.getElementById('current-distance');
-            
-                if (isBoatNearLine(boatPoint, currentLine)) {
-                    const distance = distanceFromPointToLine(boatPoint, currentLine);
-                    const meters = degreesToMeters(distance);
-            
-                    distanceElement.textContent = meters.toFixed(1);
-                    distanceElement.style.color = meters > 15 ? 'red' : 'limegreen';
-            
-                    if (distance < 0.0001) {
-                        currentLineIndex++;
-                        saveLineAsSubMission(currentLineIndex - 1);
-                        console.log(`✅ Linea ${currentLineIndex} completata`);
-            
-                        if (currentLineIndex < activeMissionLines.length) {
-                            highlightActiveLine(currentLineIndex);
-                        } else {
-                            console.log("🎉 Missione completata!");
-                            map.getSource('active-line').setData({
-                                type: 'FeatureCollection',
-                                features: []
-                            });
-                        }
-                    }
-                } else {
-                    distanceElement.textContent = ">100";
-                    distanceElement.style.color = 'red';
-                }
+                const progressElement = document.getElementById('line-progress');
+
+                const distance = distanceFromPointToLine(boatPoint, currentLine);
+                const meters = degreesToMeters(distance);
+                const progress = getProjectionProgress(boatPoint, currentLine);
+
+                distanceElement.textContent = meters.toFixed(1) + " m";
+                distanceElement.style.color = meters < 20 ? 'limegreen' : 'orange';
+
+                const progressPercent = Math.max(0, Math.min(100, (progress * 100)));
+                progressElement.textContent = `Progress: ${progressPercent.toFixed(1)}%`;
             }
-            
-            
         
             if (updatePosition) {
                 await fetch('/api/update_position', {
@@ -401,6 +456,19 @@ function distanceFromPointToLine(point, line) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
+function getProjectionProgress(point, line) {
+    const [x, y] = point;
+    const [[x1, y1], [x2, y2]] = line;
+
+    const A = x - x1;
+    const B = y - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+
+    const dot = A * C + B * D;
+    const len_sq = C * C + D * D;
+    return len_sq !== 0 ? dot / len_sq : 0;
+}
 
 document.getElementById("deleteMissionBtn").addEventListener("click", function() {
     const missionName = prompt("Enter the mission name to delete:");
@@ -911,6 +979,23 @@ document.getElementById('add-manual-line').addEventListener('click', () => {
 // Chiudi il popup
 document.getElementById('cancel-manual-line').addEventListener('click', () => {
     document.getElementById('manual-line-popup').style.display = 'none';
+});
+
+// Pulsante per passare manualmente alla linea successiva
+document.getElementById('next-line').addEventListener('click', () => {
+    if (currentLineIndex < activeMissionLines.length) {
+        saveLineAsSubMission(currentLineIndex);
+        currentLineIndex++;
+        if (currentLineIndex < activeMissionLines.length) {
+            highlightActiveLine(currentLineIndex);
+        } else {
+            map.getSource('active-line').setData({
+                type: 'FeatureCollection',
+                features: []
+            });
+            console.log("🎉 Missione completata (manuale)!");
+        }
+    }
 });
 
 // Conferma e aggiungi la linea alla mappa
