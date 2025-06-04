@@ -218,6 +218,31 @@ def save_mission():
     db.session.commit()
     return jsonify({"message": "Mission saved successfully!", "mission_id": new_mission.id})
 
+@app.route('/api/duplicate-mission-data', methods=['POST'])
+def duplicate_mission_data():
+    data = request.get_json()
+    source_id = data.get("source_id")
+    target_id = data.get("target_id")
+
+    if not source_id or not target_id:
+        return jsonify({"error": "Missing mission IDs"}), 400
+
+    original_data = USVData.query.filter_by(mission_id=source_id).order_by(USVData.timestamp.desc()).limit(100).all()
+
+    for d in reversed(original_data):
+        new_entry = USVData(
+            mission_id=target_id,
+            latitude=d.latitude,
+            longitude=d.longitude,
+            depth=d.depth,
+            timestamp=d.timestamp
+        )
+        db.session.add(new_entry)
+
+    db.session.commit()
+
+    return jsonify({"message": f"Duplicati {len(original_data)} punti da missione {source_id} a {target_id}."})
+
 @app.route('/api/get-missions', methods=['GET'])
 def get_missions():
     missions = MissionPlan.query.all()

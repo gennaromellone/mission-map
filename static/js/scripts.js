@@ -212,6 +212,41 @@ map.on('load', () => {
     
 });
 
+const popup = new maplibregl.Popup({
+    closeButton: false,
+    closeOnClick: false
+});
+
+map.on('mousemove', 'mission-lines-layer', (e) => {
+    const feature = e.features[0];
+
+    if (feature && feature.geometry.type === 'LineString') {
+        const coords = feature.geometry.coordinates;
+        const pointA = coords[0];
+        const pointB = coords[coords.length - 1];
+        const lengthMeters = distanceInMeters(pointA, pointB);
+
+        const html = `
+            <div style="color: black; font-size: 13px;">
+                <strong>Linea</strong><br>
+                A: ${pointA[1].toFixed(5)}, ${pointA[0].toFixed(5)}<br>
+                B: ${pointB[1].toFixed(5)}, ${pointB[0].toFixed(5)}<br>
+                Lunghezza: ${lengthMeters.toFixed(1)} m
+            </div>
+        `;
+
+        popup.setLngLat(e.lngLat)
+             .setHTML(html)
+             .addTo(map);
+    }
+});
+
+
+map.on('mouseleave', 'mission-lines-layer', () => {
+    popup.remove();
+});
+
+
 const boatElement = document.createElement('div');
 boatElement.className = 'boat-marker';
 boatElement.style.backgroundImage = "url('/static/icons/boat.png')";
@@ -282,6 +317,18 @@ async function displayHistoricalPath(missionId) {
     }
 }
 
+function distanceInMeters([lon1, lat1], [lon2, lat2]) {
+    const R = 6371000; // Raggio terrestre in metri
+    const toRad = deg => deg * Math.PI / 180;
+
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
 
 async function updateLiveBoatData(data, updatePosition = false) {
     if (data.path && data.path.length > 0) {
@@ -645,6 +692,9 @@ function finalizeCurrentLine() {
                 geometry: {
                     type: 'LineString',
                     coordinates: currentLineCoords
+                },
+                properties: {
+                    id: Date.now()  // o un contatore univoco
                 }
             };
 
@@ -969,6 +1019,19 @@ async function saveLineAsSubMission(index) {
 
     const result = await response.json();
     console.log(`✅ Salvata sotto-missione: ${subMissionName}`, result);
+
+    // Duplicazione coordinate dalla missione principale
+    if (selectedMissionId && result.mission_id) {
+        await fetch('/api/duplicate-mission-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_id: selectedMissionId,
+                target_id: result.mission_id
+            })
+        });
+    }
+
 }
 
 // Mostra popup quando clicchi su "Add Manual Line"
