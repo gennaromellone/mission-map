@@ -142,7 +142,7 @@ const map = new maplibregl.Map({
             }
         ]
     },
-    minZoom: 10,
+    minZoom: 6,
     maxZoom: 20,
     center: previousPoint,
     zoom: 14,
@@ -204,7 +204,7 @@ map.on('load', () => {
             'symbol-placement': 'line',
             'symbol-spacing': 60,
             'icon-image': 'arrow-icon',
-            'icon-size': 0.6,
+            'icon-size': 0.1,
             'icon-allow-overlap': true,
             'icon-ignore-placement': true
         }
@@ -291,24 +291,25 @@ async function displayHistoricalPath(missionId) {
 
     if (data.path && data.path.length > 0) {
         const pathCoords = data.path.map(p => [p.lon, p.lat]);
-        const source = map.getSource('realtime-path');
 
-        if (source) {
-            source.setData({
-                type: 'FeatureCollection',
-                features: [
-                    {
-                        type: 'Feature',
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: pathCoords
+        if (!missionRunning) {
+            const source = map.getSource('realtime-path');
+            if (source) {
+                source.setData({
+                    type: 'FeatureCollection',
+                    features: [
+                        {
+                            type: 'Feature',
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: pathCoords
+                            }
                         }
-                    }
-                ]
-            });
+                    ]
+                });
+            }
         }
 
-        // Centro la mappa sull’ultimo punto
         const last = pathCoords[pathCoords.length - 1];
         map.easeTo({
             center: last,
@@ -316,6 +317,7 @@ async function displayHistoricalPath(missionId) {
         });
     }
 }
+
 
 function distanceInMeters([lon1, lat1], [lon2, lat2]) {
     const R = 6371000; // Raggio terrestre in metri
@@ -359,18 +361,20 @@ async function updateLiveBoatData(data, updatePosition = false) {
             document.getElementById('current-lon').textContent = latest.lon + latest.lon_dir;
             document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
 
-            map.getSource('realtime-path').setData({
-                type: 'FeatureCollection',
-                features: [
-                    {
-                        type: 'Feature',
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: data.path.map(p => [p.lon, p.lat])
+            if (data.path && data.path.length >= 2) {
+                map.getSource('realtime-path').setData({
+                    type: 'FeatureCollection',
+                    features: [
+                        {
+                            type: 'Feature',
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: data.path.map(p => [p.lon, p.lat])
+                            }
                         }
-                    }
-                ]
-            });
+                    ]
+                });
+            }
 
             if (activeMissionLines.length > 0 && currentLineIndex < activeMissionLines.length) {
                 const currentLine = activeMissionLines[currentLineIndex];
