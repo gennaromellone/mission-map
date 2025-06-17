@@ -133,28 +133,36 @@ def update_config():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/api/update_position', methods=['POST'])
 def update_position():
-    data = request.get_json()
-    if data['mission_id'] != None:
-        new_data = USVData(latitude=data['latitude'], longitude=data['longitude'], depth=data['depth'], mission_id=data['mission_id'])
-    else:
-        new_data = USVData(latitude=data['latitude'], longitude=data['longitude'], depth=data['depth'])
+    try:
+        data = request.get_json()
+        if data['mission_id'] != None:
+            new_data = USVData(latitude=data['latitude'], longitude=data['longitude'], depth=data['depth'], mission_id=data['mission_id'])
+        else:
+            new_data = USVData(latitude=data['latitude'], longitude=data['longitude'], depth=data['depth'])
 
-    db.session.add(new_data)
-    db.session.commit()
-    return jsonify({'status': 'success'})
+        db.session.add(new_data)
+        db.session.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRORE DB]: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 @app.route('/api/simulate_position', methods=['GET'])
 def get_simulated_position():
-    lat_min, lat_max = 40.6, 40.9  # Limiti di latitudine
-    lon_min, lon_max = 13.9, 14.5  # Limiti di longitudine
+    lat_min, lat_max = 40.8, 40.9  # Limiti di latitudine
+    lon_min, lon_max = 14.4, 14.5  # Limiti di longitudine
     depth_min, depth_max = 10, 200  # Profondità tra 10m e 200m
-
+    rotate_min, rotate_max = 0, 180
     random_position = {
         "lat": round(random.uniform(lat_min, lat_max), 6),
         "lon": round(random.uniform(lon_min, lon_max), 6),
-        "depth": round(random.uniform(depth_min, depth_max), 2)
+        'degrees': round(random.uniform(depth_min, depth_max), 2),
+        "depth": round(random.uniform(rotate_min, rotate_max), 2)
     }
 
     return jsonify({"path": [random_position]})
@@ -199,8 +207,8 @@ def get_position():
                 statusDepth = 'err'
                 if 'error' not in data['msg']:
                     depth = data.get("msg", {}).get("depth", 0.0)
+                    last_valid_position['depth'] = depth
                     if depth != 0.0:
-                        last_valid_position['depth'] = depth
                         statusDepth = 'ok'
                 last_valid_position['statusDepth'] = statusDepth
     return jsonify({"path": [last_valid_position]})
@@ -365,4 +373,4 @@ def get_vector_tile(z, x, y):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(host='0.0.0.0', port=80, threaded=False)
+    app.run(host='0.0.0.0', port=80, threaded=True)

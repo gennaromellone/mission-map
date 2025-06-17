@@ -4,7 +4,7 @@ import re
 import json
 import pynmea2
 import threading
-
+import time
 class Device:
     def __init__(self, device_config):
         self.device_config = device_config
@@ -31,22 +31,36 @@ class Device:
         return None
 
     def read_loop(self):
-        """Ciclo continuo di lettura per mantenere aggiornati i dati."""
+        """Ciclo continuo di lettura per mantenere aggiornati i dati del dispositivo seriale."""
         if not self.port:
-            print(f"[ERRORE] Nessuna porta specificata per il dispositivo {self.description}")
+            print(f"[ERRORE] Nessuna porta specificata per il dispositivo '{self.description}'")
             return
-        
-        try:
-            with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
-                print(f"[INFO] Connessione a {self.port} aperta.")
-                while self.running:                    
-                    line = ser.readline().decode(errors='ignore').strip()
-                    if line:
-                        processed = self.process_data(line)
-                        if processed != None:
-                            self.latest_data = processed
-        except serial.SerialException as e:
-            print(f"[ERRORE] Impossibile connettersi a {self.port}: {e}")
+
+        while self.running:
+            try:
+                with serial.Serial(self.port, self.baudrate, timeout=0.5) as ser:
+                    print(f"[INFO] Connessione seriale aperta su {self.port} ({self.description})")
+
+                    while self.running:
+                        try:
+                            line = ser.readline().decode(errors='ignore').strip()
+                            if line:
+                                processed = self.process_data(line)
+                                if processed is not None:
+                                    self.latest_data = processed
+                        except serial.SerialException as e:
+                            print(f"[ERRORE] Lettura seriale fallita su {self.port}: {e}")
+                            break  # esce e riprova a connettersi
+                        except Exception as e:
+                            print(f"[ERRORE] Eccezione durante il parsing dei dati ({self.port}): {e}")
+                            time.sleep(0.5)
+
+            except serial.SerialException as e:
+                print(f"[ERRORE] Impossibile aprire {self.port} ({self.description}): {e}")
+
+            # Attesa prima di riprovare ad aprire la porta
+            print(f"[INFO] Riprovo a connettere {self.description} tra 3 secondi...")
+            time.sleep(3)
 
     def process_data(self, packet):
         """Metodo generico da sovrascrivere nelle sottoclassi."""
