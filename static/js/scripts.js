@@ -274,7 +274,7 @@ document.getElementById('menu-toggle').addEventListener('click', () => {
 
     // Sposta il pulsante assieme al menu
     if (sidebar.classList.contains('open')) {
-        menuToggle.style.left = "250px"; // Stessa larghezza del menu
+        menuToggle.style.left = "120px"; // Stessa larghezza del menu
     } else {
         menuToggle.style.left = "20px";
     }
@@ -333,8 +333,6 @@ function distanceInMeters([lon1, lat1], [lon2, lat2]) {
 }
 
 async function updateLiveBoatData(data, updatePosition = false) {
-    console.log("updatePosition:", updatePosition);
-    console.log("startMission:", missionRunning);
     if (!data.path || data.path.length === 0) return;
 
     const latest = data.path[data.path.length - 1];
@@ -484,7 +482,12 @@ document.getElementById('start-mission').addEventListener('click', async () => {
         }, 1000);
 
         missionRunning = true;
-        button.textContent = "Stop Mission";
+        const icon = button.querySelector('i');
+        if (icon) {
+            icon.classList.remove('fa-play');
+            icon.classList.add('fa-stop');
+        }
+
         const sidebar = document.getElementById('sidebar');
         const menuToggle = document.getElementById('menu-toggle');
 
@@ -510,7 +513,12 @@ document.getElementById('start-mission').addEventListener('click', async () => {
         document.getElementById('current-distance').style.color = '#fff';
 
         missionRunning = false;
-        button.textContent = "Start Mission";
+        const icon = button.querySelector('i');
+        if (icon) {
+            icon.classList.remove('fa-stop');
+            icon.classList.add('fa-play');
+        }
+
         livePosition();
         resetButtons();
     }
@@ -858,14 +866,14 @@ document.getElementById('edit-lines').addEventListener('click', () => {
 
     if (editMode) {
         enableRemovingMode();
-        document.getElementById('edit-lines').textContent = "Stop Editing";
+        document.getElementById('edit-lines').style.backgroundColor = "red";
         document.getElementById('add-line').disabled = true;
-        document.getElementById('clear-line').disabled = true;
+        document.getElementById('add-manual-line').disabled = true;
     } else {
         disableRemovingMode();
-        document.getElementById('edit-lines').textContent = "Edit Lines";
+        document.getElementById('edit-lines').style.backgroundColor = "";
         document.getElementById('add-line').disabled = false;
-        document.getElementById('clear-line').disabled = false;
+        document.getElementById('add-manual-line').disabled = false;
     }
 });
 

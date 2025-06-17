@@ -31,6 +31,7 @@ body {
     background-color: #219ebc;
     color: white;
     border-radius: 5px;
+    text-align: center;
 }
 .button:hover {
     background-color: #8ecae6;
@@ -119,7 +120,7 @@ body {
 }
 
 #sidebar.open + #menu-toggle {
-    left: 250px;
+    left: 150px;
     pointer-events: auto;
 }
 
@@ -128,7 +129,7 @@ body {
     position: absolute;
     top: 0;
     left: -270px; /* Assicura che sia fuori dallo schermo */
-    width: 200px;
+    width: 60px;
     height: 100%;
     background: #023047;
     box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.3);
@@ -150,7 +151,7 @@ body {
 /* Stile dei pulsanti nel menu */
 #sidebar .button {
     width: 100%;
-    text-align: left;
+    text-align: center;
     padding: 12px;
     margin: 5px 0;
     background-color: #219ebc;
@@ -232,11 +233,11 @@ body {
 
 @media (max-width: 1024px) {
     #sidebar {
-        width: 160px;
+        width: 50px;
     }
 
     #sidebar.open + #menu-toggle {
-        left: 160px;
+        left: 60px;
     }
 
     #sidebar .button {
@@ -248,4 +249,14 @@ body {
         font-size: 11px;
         width: 100%;
     }
+}
+
+#sidebar .button i {
+    font-size: 20px;
+    color: white;
+}
+
+#sidebar .submenu {
+  background-color: rgba(255, 255, 255, 0.1);
+  font-size: 12px;
 }

@@ -5,34 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mission Planner</title>
     <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/all.min.css">
     <link href="/static/css/maplibre-gl.css" rel="stylesheet" />
 </head>
 <body>
     <!-- Menu laterale fuori dal div mappa -->
     <!-- Menu laterale -->
     <div id="sidebar">
-        <div>Mission-Planner App</div>
-        <button class="button" id="plan-mission">Plan Mission</button>
+        <div style="padding: 10px;"><i class="fa-solid fa-compass"></i></div>
+
+        <button class="button" id="plan-mission" title="Plan Mission"><i class="fa-solid fa-map"></i></button>
+
         <div id="mission-controls" style="display: none;">
-            <button class="button" id="add-line">Add Line</button>
-            <button class="button" id="add-manual-line">Add Manual Line</button>
-            <button class="button" id="edit-lines">Edit Lines</button>
-            <button class="button" id="clear-line">Clear</button>
+            <button class="button submenu" id="add-line" title="Add Line"><i class="fa-solid fa-plus"></i></button>
+            <button class="button submenu" id="add-manual-line" title="Add Manual Line"><i class="fa-solid fa-keyboard"></i></button>
+            <button class="button submenu" id="edit-lines" title="Edit Lines"><i class="fa-solid fa-pen"></i></button>
         </div>
-        <button class="button" id="create-mission">Create Mission</button>
-        <button class="button" id="deleteMissionBtn">Delete Mission</button>
 
-        <button class="button" style="margin-top: 25px;" id="start-mission">Start Mission</button>
+        <button class="button" style="margin-top: 60px;" id="create-mission" title="Create Mission"><i class="fa-solid fa-file"></i></button>
+        <button class="button" id="deleteMissionBtn" title="Delete Mission"><i class="fa-solid fa-trash-can"></i></button>
+
+        <button class="button" id="start-mission" title="Start Mission"><i class="fa-solid fa-play"></i></button>
+
         <div id="live-mission-controls" style="display: none;">
-            <button class="button" id="complete-line">Complete Line</button>
-            <button class="button" id="next-line">Passa alla linea successiva</button>
+            <button class="button" id="complete-line" title="Complete Line"><i class="fa-solid fa-check"></i></button>
+            <button class="button" id="next-line" title="Next Line"><i class="fa-solid fa-forward-step"></i></button>
         </div>
+        <button class="button" style="margin-top: 25px;" id="load-mission" title="Load Mission"><i class="fa-solid fa-folder-open"></i></button>
+        <button class="button"  id="save-mission" title="Save Mission"><i class="fa-solid fa-save"></i></button>
+        <button class="button" id="export-mission" title="Export Mission"><i class="fa-solid fa-download"></i></button>
 
-        <button class="button" style="margin-top: 25px;" id="save-mission">Save</button>
-        <button class="button" id="load-mission">Load</button>
-        <button class="button" id="export-mission">Export</button>
-        <button class="button" onclick="location.href = '/configuration'" style="margin-top: 25px;" id="setting-mission">Settings</button>
+        <button class="button" style="margin-top: 25px;" id="setting-mission" title="Settings" onclick="location.href='/configuration'"><i class="fa-solid fa-gear"></i></button>
     </div>
+
 
     <div id="menu-toggle">☰</div>
 
