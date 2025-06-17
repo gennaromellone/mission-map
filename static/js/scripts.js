@@ -9,6 +9,7 @@ let currentLineCoords = [];
 let activeMissionLines = [];
 let currentLineIndex = 0;
 let lastValidAngle = null;
+let livePositionInterval = null;
 
 let previousPoint = { lon: 14.284214343900299, lat: 40.855640711460936 };
 
@@ -281,7 +282,6 @@ document.getElementById('menu-toggle').addEventListener('click', () => {
 map.on('rotate', () => {
     if (previousPoint) {
         updateRotatingDirectionLine(previousPoint.lat, previousPoint.lon);
-        updateRotatingDirectionLine(previousPoint.lat, previousPoint.lon);
     }
 });
 
@@ -311,7 +311,7 @@ async function displayHistoricalPath(missionId) {
         }
 
         const last = pathCoords[pathCoords.length - 1];
-        map.easeTo({
+        map.jumpTo({
             center: last,
             zoom: 14
         });
@@ -333,91 +333,126 @@ function distanceInMeters([lon1, lat1], [lon2, lat2]) {
 }
 
 async function updateLiveBoatData(data, updatePosition = false) {
-    if (data.path && data.path.length > 0) {
-        const latest = data.path[data.path.length - 1];
-        if (latest.lon > 0 && latest.lat > 0) {
-            const angle = parseFloat(latest.degrees || 0.0);
-            if (angle === 0 && lastValidAngle !== null) {
-                angle = lastValidAngle;
-            } else if (angle !== 0) {
-                lastValidAngle = angle;
-            }
+    console.log("updatePosition:", updatePosition);
+    console.log("startMission:", missionRunning);
+    if (!data.path || data.path.length === 0) return;
 
-            boatMarker.setLngLat([latest.lon, latest.lat]);
-            rotateMap(angle);
-            updateDirectionLine(latest.lat, latest.lon);
-            updateRotatingDirectionLine(latest.lat, latest.lon, angle);
+    const latest = data.path[data.path.length - 1];
+    if (latest.lon <= 0 || latest.lat <= 0) return;
 
-            if (updatePosition) {
-                map.easeTo({
-                    center: [latest.lon, latest.lat],
-                    bearing: map.getBearing(),
-                    duration: 500
-                });
-            }
+    let angle = parseFloat(latest.degrees || 0.0);
+    if (angle === 0 && lastValidAngle !== null) {
+        angle = lastValidAngle;
+    } else if (angle !== 0) {
+        lastValidAngle = angle;
+    }
+    currentLngLat = [latest.lon, latest.lat];
+    boatMarker.setLngLat([latest.lon, latest.lat]);
+    updateDirectionLine(latest.lat, latest.lon);
+    updateRotatingDirectionLine(latest.lat, latest.lon, angle);
 
-            previousPoint = { lat: latest.lat, lon: latest.lon };
-            document.getElementById('current-lat').textContent = latest.lat + latest.lat_dir;
-            document.getElementById('current-lon').textContent = latest.lon + latest.lon_dir;
-            document.getElementById('current-depth').textContent = latest.depth.toFixed(2);
+    if (updatePosition) {
+        rotateMap(angle);
+        map.easeTo({
+            center: [latest.lon, latest.lat],
+            bearing: angle,
+            duration: 500
+        });
+    }
 
-            if (data.path && data.path.length >= 2) {
-                map.getSource('realtime-path').setData({
-                    type: 'FeatureCollection',
-                    features: [
-                        {
-                            type: 'Feature',
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: data.path.map(p => [p.lon, p.lat])
-                            }
-                        }
-                    ]
-                });
-            }
+    previousPoint = { lat: latest.lat, lon: latest.lon };
 
-            if (activeMissionLines.length > 0 && currentLineIndex < activeMissionLines.length) {
-                const currentLine = activeMissionLines[currentLineIndex];
-                const boatPoint = [latest.lon, latest.lat];
-                const distanceElement = document.getElementById('current-distance');
-                const progressElement = document.getElementById('line-progress');
+    // Aggiorna interfaccia utente
+    document.getElementById('current-lat').textContent = latest.lat + latest.lat_dir;
+    document.getElementById('current-lon').textContent = latest.lon + latest.lon_dir;
+    document.getElementById('current-depth').textContent = (latest.depth || 0).toFixed(2);
 
-                const distance = distanceFromPointToLine(boatPoint, currentLine);
-                const meters = degreesToMeters(distance);
-                const progress = getProjectionProgress(boatPoint, currentLine);
+    if (missionRunning) {
+        if (!window.realtimeCoordinates) window.realtimeCoordinates = [];
+        window.realtimeCoordinates.push(currentLngLat);
+        if (window.realtimeCoordinates.length > 100) {
+            window.realtimeCoordinates.shift();
+        }
 
-                distanceElement.textContent = meters.toFixed(1) + " m";
-                distanceElement.style.color = meters < 20 ? 'limegreen' : 'orange';
+        const realtimePathSource = map.getSource('realtime-path');
+        if (realtimePathSource) {
+            realtimePathSource.setData({
+                type: 'FeatureCollection',
+                features: [{
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: window.realtimeCoordinates
+                    }
+                }]
+            });
+        }
+    }
 
-                const progressPercent = Math.max(0, Math.min(100, (progress * 100)));
-                progressElement.textContent = `Progress: ${progressPercent.toFixed(1)}%`;
-            }
-        
-            if (updatePosition) {
-                await fetch('/api/update_position', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        latitude: latest.lat,
-                        longitude: latest.lon,
-                        depth: latest.depth,
-                        mission_id: selectedMissionId
-                    })
-                });
-            }
+    // Recenter istantaneo se richiesto
+    if (updatePosition) {
+        map.jumpTo({
+            center: currentLngLat,
+            bearing: angle
+        });
+    }
+
+    // Calcoli per distanza/progresso attivo
+    if (activeMissionLines.length > 0 && currentLineIndex < activeMissionLines.length) {
+        const currentLine = activeMissionLines[currentLineIndex];
+        const boatPoint = currentLngLat;
+        const distance = distanceFromPointToLine(boatPoint, currentLine);
+        const meters = degreesToMeters(distance);
+        const progress = getProjectionProgress(boatPoint, currentLine);
+
+        document.getElementById('current-distance').textContent = meters.toFixed(1) + " m";
+        document.getElementById('current-distance').style.color = meters < 20 ? 'limegreen' : 'orange';
+        document.getElementById('line-progress').textContent = `Progress: ${Math.max(0, Math.min(100, progress * 100)).toFixed(1)}%`;
+    }
+
+    // Scrittura su DB throttled
+    if (missionRunning && updatePosition) {
+        const now = Date.now();
+        if (!window.lastDbWrite || now - window.lastDbWrite > 1000) {
+            window.lastDbWrite = now;
+            await fetch('/api/update_position', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    latitude: latest.lat,
+                    longitude: latest.lon,
+                    depth: latest.depth || 0.0,
+                    mission_id: selectedMissionId
+                })
+            });
         }
     }
 }
 
-
 function livePosition(updatePosition = false) {
-    setInterval(async () => {
-        updateDirectionLine(previousPoint.lat, previousPoint.lon);
-        updateRotatingDirectionLine(previousPoint.lat, previousPoint.lon);
-        const response = await fetch('/api/position');
-        const data = await response.json();
-        await updateLiveBoatData(data, updatePosition);
+    if (livePositionInterval) return; // Previeni duplicazione
+
+    livePositionInterval = setInterval(async () => {
+        try {
+            updateDirectionLine(previousPoint.lat, previousPoint.lon);
+            updateRotatingDirectionLine(previousPoint.lat, previousPoint.lon);
+
+            const response = await fetch('/api/position');
+            const data = await response.json();
+
+            await updateLiveBoatData(data, updatePosition);
+        } catch (err) {
+            console.error("Errore durante l'aggiornamento della posizione live:", err);
+        }
     }, 1000);
+}
+
+function stopLivePosition() {
+    if (livePositionInterval) {
+        clearInterval(livePositionInterval);
+        livePositionInterval = null;
+        window.livePositionStarted = false;
+    }
 }
 
 
@@ -429,6 +464,8 @@ document.getElementById('start-mission').addEventListener('click', async () => {
             alert("⚠️ Nessuna missione selezionata! Crea o carica una missione prima di iniziare.");
             return;
         }
+        stopLivePosition();
+
         activeMissionLines = [...drawnLines];
         currentLineIndex = 0;
         highlightActiveLine(currentLineIndex);
@@ -474,6 +511,7 @@ document.getElementById('start-mission').addEventListener('click', async () => {
 
         missionRunning = false;
         button.textContent = "Start Mission";
+        livePosition();
         resetButtons();
     }
 });
@@ -556,12 +594,11 @@ function rotateMap(bearingDegrees) {
 }
 
 function updateRotatingDirectionLine(lat, lon, bearing = null) {
-    const length = 0.2; // distanza (in gradi) da usare per la linea (puoi regolarla)
+    const lengthMeters = 5500;
     const usedBearing = (bearing !== null) ? bearing : map.getBearing();
-    // Convert bearing in radianti e calcola il secondo punto
-    const angleRad = (usedBearing * Math.PI) / 180;
-    const destLat = lat + length * Math.cos(angleRad);
-    const destLon = lon + length * Math.sin(angleRad);
+    // Convert bearing in radianti e calcola il secondo punto        
+    const [destLon, destLat] = destinationPoint(lat, lon, lengthMeters, usedBearing);
+
 
     const geojson = {
         type: 'FeatureCollection',
@@ -635,10 +672,9 @@ function resetButtons() {
 
 document.getElementById('recenter-map').addEventListener('click', () => {
     if (previousPoint) {
-        map.easeTo({
+        map.jumpTo({
             center: [previousPoint.lon, previousPoint.lat],
-            bearing: map.getBearing(), // conserva la rotazione attuale
-            duration: 1000
+            bearing: map.getBearing()
         });
     }
 });
@@ -1096,6 +1132,28 @@ document.getElementById('confirm-manual-line').addEventListener('click', () => {
     // Chiudi il popup
     document.getElementById('manual-line-popup').style.display = 'none';
 });
+
+function destinationPoint(lat, lon, distance, bearingDegrees) {
+    const R = 6371000; 
+    const δ = distance / R;
+    const θ = bearingDegrees * Math.PI / 180; 
+
+    const φ1 = lat * Math.PI / 180;
+    const λ1 = lon * Math.PI / 180;
+
+    const φ2 = Math.asin(
+        Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ)
+    );
+    const λ2 = λ1 + Math.atan2(
+        Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
+        Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2)
+    );
+
+    return [
+        λ2 * 180 / Math.PI,
+        φ2 * 180 / Math.PI
+    ];
+}
 
 function isBoatNearLine(boatPoint, line, thresholdDeg = 0.001) {
     const bbox = [
