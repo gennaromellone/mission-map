@@ -1,4 +1,10 @@
 {
+    "depth": {
+        "type": "Depth",
+        "port": "/dev/ttyUSB1",
+        "baudrate": "4800",
+        "description": ""
+    },
     "gps": {
         "type": "NMEA0183",
         "port": "/dev/ttyUSB0",
