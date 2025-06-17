@@ -175,3 +175,5 @@ cython_debug/
 
 offline-map/
 static/tiles/
+
+config.json
