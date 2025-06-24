@@ -347,7 +347,7 @@ async function updateLiveBoatData(data, updatePosition = false) {
     currentLngLat = [latest.lon, latest.lat];
     boatMarker.setLngLat([latest.lon, latest.lat]);
     updateDirectionLine(latest.lat, latest.lon);
-    updateRotatingDirectionLine(latest.lat, latest.lon, angle);
+    updateRotatingDirectionLine(latest.lat, latest.lon, lastValidAngle);
 
     if (updatePosition) {
         rotateMap(angle);
@@ -433,7 +433,7 @@ function livePosition(updatePosition = false) {
     livePositionInterval = setInterval(async () => {
         try {
             updateDirectionLine(previousPoint.lat, previousPoint.lon);
-            updateRotatingDirectionLine(previousPoint.lat, previousPoint.lon);
+            updateRotatingDirectionLine(previousPoint.lat, previousPoint.lon, lastValidAngle);
 
             const response = await fetch('/api/position');
             const data = await response.json();
@@ -602,7 +602,7 @@ function rotateMap(bearingDegrees) {
 }
 
 function updateRotatingDirectionLine(lat, lon, bearing = null) {
-    const lengthMeters = 5500;
+    const lengthMeters = 900000;
     const usedBearing = (bearing !== null) ? bearing : map.getBearing();
     // Convert bearing in radianti e calcola il secondo punto        
     const [destLon, destLat] = destinationPoint(lat, lon, lengthMeters, usedBearing);
@@ -947,8 +947,21 @@ document.getElementById('confirm-save').addEventListener('click', async () => {
 
 function updateSaveButtonText() {
     const saveButton = document.getElementById('save-mission');
-    saveButton.textContent = selectedMissionId ? "Update" : "Save";
+    const icon = saveButton.querySelector('i');
+
+    if (!icon) return;
+
+    if (selectedMissionId) {
+        icon.classList.remove('fa-save');
+        icon.classList.add('fa-pen');
+        saveButton.title = "Update Mission";
+    } else {
+        icon.classList.remove('fa-pen');
+        icon.classList.add('fa-save');
+        saveButton.title = "Save Mission";
+    }
 }
+
 
 // LOAD MISSION
 document.getElementById('load-mission').addEventListener('click', async () => {
